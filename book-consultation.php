@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // Antigo UI/UX Advisory — Book a Consultation Page
 session_start();
 ?>
@@ -216,10 +216,40 @@ session_start();
             transition: all 0.2s ease;
         }
 
-        .input-field:focus {
-            outline: none;
-            border-color: var(--violet);
-            background: #FFFFFF;
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+        .logo-mark {
+            height: 38px;
+            width: auto;
+            max-width: 54px;
+            flex-shrink: 0;
+            object-fit: contain;
+        }
+        .logo-text {
+            line-height: 1.15;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .logo-text .word {
+            font-weight: 800;
+            font-size: 18px;
+            letter-spacing: 0.05em;
+            color: var(--navy);
+            line-height: 1.1;
+        }
+        .logo-text .sub {
+            font-size: 9px;
+            letter-spacing: 0.22em;
+            color: var(--violet);
+            text-transform: uppercase;
+            font-weight: 700;
+            line-height: 1.1;
+            margin-top: 2px;
         }
     </style>
 </head>
@@ -228,13 +258,11 @@ session_start();
     <!-- Header -->
     <header class="sticky top-0 z-50 w-full glass-header">
         <nav class="max-w-[1360px] mx-auto px-6 lg:px-10 h-20 flex items-center justify-between">
-            <a href="home.php" class="flex items-center gap-3 group">
-                <div class="w-10 h-10 bg-gradient-brand rounded-xl flex items-center justify-center font-extrabold text-white text-base shadow-md group-hover:scale-105 transition-transform">
-                    AJ
-                </div>
-                <div class="flex flex-col leading-tight">
-                    <span class="font-extrabold tracking-wide uppercase text-sm text-[#13224B]">Antigo</span>
-                    <span class="text-[9px] text-[#6C5BB5] font-bold tracking-[0.22em] uppercase">UI/UX Advisory</span>
+            <a href="home.php" class="logo">
+                <img src="images/antigo-mark.png?v=2.0" alt="Antigo Logo" class="logo-mark">
+                <div class="logo-text">
+                    <div class="word">ANTIGO</div>
+                    <div class="sub">UI/UX ADVISORY</div>
                 </div>
             </a>
 
