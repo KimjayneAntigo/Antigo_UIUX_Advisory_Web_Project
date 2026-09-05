@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Antigo UI/UX Advisory — Homepage Mockup</title>
+<title>Antigo UI/UX Advisory — Modern Digital Experiences</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css?v=2.0">
+<script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
 </head>
 <body>
 
@@ -21,8 +22,6 @@
       </div>
     </a>
     <ul class="nav-links">
-      <!-- Original functional links commented out so clicking does not navigate, preserving hover effects -->
-
       <li><a href="#home">Home</a></li>
       <li><a href="#about">About</a></li>
       <li><a href="#services">Services</a></li>
@@ -34,7 +33,8 @@
         <svg class="moon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>
         <svg class="sun" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
       </button>
-      <a href="03-inquiry.html" class="btn btn-primary btn-sm">Contact Me</a>
+      <a href="01-login.html" class="btn btn-outline btn-sm">Client Portal</a>
+      <a href="03-inquiry.html" class="btn btn-primary btn-sm">Start a Project</a>
       <button class="burger" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     </div>
   </nav>
@@ -49,7 +49,7 @@
       <h1>Designing digital<br>experiences that <span class="accent">people love.</span></h1>
       <p class="lead">Helping brands create intuitive, engaging, and user-centered interfaces through thoughtful design and modern digital solutions.</p>
       <div class="hero-actions">
-        <a href="#portfolio" class="btn btn-primary">View Services</a>
+        <a href="#services" class="btn btn-primary">View Services</a>
         <a href="02-book-consultation.html" class="btn btn-outline">Book a Consultation</a>
       </div>
       <div class="trust-row">
@@ -89,6 +89,7 @@
   </div>
 </section>
 
+<!-- PERSONALITY MARQUEE -->
 <div class="personality">
   <div class="marquee">
     <span class="chip">Professional</span><span class="chip">Modern</span><span class="chip">Clean</span>
@@ -101,6 +102,34 @@
     <span class="chip">Trustworthy</span>
   </div>
 </div>
+
+<!-- HOW IT WORKS -->
+<section class="pad" style="background:var(--surface);">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">How It Works</span>
+      <h2>From concept to polished product</h2>
+      <p>A streamlined, research-backed workflow designed for clarity and speed.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:32px;">
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:36px 30px;position:relative;">
+        <div style="width:44px;height:44px;border-radius:12px;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;margin-bottom:20px;">1</div>
+        <h3 style="font-size:19px;margin-bottom:12px;color:var(--text);">1. Submit Project Inquiry</h3>
+        <p style="font-size:14px;color:var(--text-soft);line-height:1.7;">Tell us about your product goals, requirements, timeline, and budget through our canonical lead intake.</p>
+      </div>
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:36px 30px;position:relative;">
+        <div style="width:44px;height:44px;border-radius:12px;background:var(--grad-soft);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;margin-bottom:20px;">2</div>
+        <h3 style="font-size:19px;margin-bottom:12px;color:var(--text);">2. Schedule Advisory Call</h3>
+        <p style="font-size:14px;color:var(--text-soft);line-height:1.7;">Pick a convenient consultation slot on our live calendar to align on strategy, scope, and deliverables.</p>
+      </div>
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:36px 30px;position:relative;">
+        <div style="width:44px;height:44px;border-radius:12px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;margin-bottom:20px;">3</div>
+        <h3 style="font-size:19px;margin-bottom:12px;color:var(--text);">3. Collaborate &amp; Build</h3>
+        <p style="font-size:14px;color:var(--text-soft);line-height:1.7;">Track milestones, review prototypes, and chat directly in your dedicated client workspace portal.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- ABOUT -->
 <section class="pad" id="about">
@@ -121,7 +150,7 @@
           <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Dumaguete City, Philippines</div>
           <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>antigokimberlyjayne@gmail.com</div>
         </div>
-        <a href="#contact" class="btn btn-primary" style="width:100%;justify-content:center;">Let's Talk</a>
+        <a href="03-inquiry.html" class="btn btn-primary" style="width:100%;justify-content:center;">Start a Project</a>
       </div>
       <div class="about-copy">
         <p>I'm a UI/UX designer and IT student based in Dumaguete City, focused on turning fuzzy problems into interfaces that feel obvious to use. My work sits at the intersection of research, visual design, and front-end craft — I like knowing not just how a screen should look, but why.</p>
@@ -187,51 +216,8 @@
   </div>
 </section>
 
-<!-- PORTFOLIO -->
-<!-- <section class="pad" id="portfolio">
-  <div class="wrap">
-    <div class="section-head">
-      <span class="eyebrow">Selected Work</span>
-      <h2>Featured projects</h2>
-      <p>A mix of product, mobile, and web design work — case studies available on request.</p>
-    </div>
-    <div class="portfolio-tabs">
-      <button class="tab active">All</button>
-      <button class="tab">UI Design</button>
-      <button class="tab">UX Research</button>
-      <button class="tab">Web Design</button>
-    </div>
-    <div class="portfolio-grid">
-      <article class="project-card">
-        <div class="project-thumb"><div class="g" style="background:linear-gradient(135deg,#13224B,#6C5BB5)"></div><div class="device"><div class="device-frame"></div></div><div class="overlay"><a href="#" class="view-case">View Case Study →</a></div></div>
-        <div class="project-body"><span class="project-cat">Fintech · Mobile App</span><h3>Pesolink Banking Redesign</h3></div>
-      </article>
-      <article class="project-card">
-        <div class="project-thumb"><div class="g" style="background:linear-gradient(135deg,#4C6CCB,#6C5BB5)"></div><div class="device"><div class="device-frame"></div></div><div class="overlay"><a href="#" class="view-case">View Case Study →</a></div></div>
-        <div class="project-body"><span class="project-cat">Healthcare · Web Platform</span><h3>Clinic Booking System</h3></div>
-      </article>
-      <article class="project-card">
-        <div class="project-thumb"><div class="g" style="background:linear-gradient(135deg,#13224B,#4C6CCB)"></div><div class="device"><div class="device-frame"></div></div><div class="overlay"><a href="#" class="view-case">View Case Study →</a></div></div>
-        <div class="project-body"><span class="project-cat">Retail · Design System</span><h3>Kape Roasters Storefront</h3></div>
-      </article>
-      <article class="project-card">
-        <div class="project-thumb"><div class="g" style="background:linear-gradient(135deg,#6C5BB5,#13224B)"></div><div class="device"><div class="device-frame"></div></div><div class="overlay"><a href="#" class="view-case">View Case Study →</a></div></div>
-        <div class="project-body"><span class="project-cat">Education · UX Research</span><h3>Campus Advising Portal</h3></div>
-      </article>
-      <article class="project-card">
-        <div class="project-thumb"><div class="g" style="background:linear-gradient(135deg,#4C6CCB,#13224B)"></div><div class="device"><div class="device-frame"></div></div><div class="overlay"><a href="#" class="view-case">View Case Study →</a></div></div>
-        <div class="project-body"><span class="project-cat">Travel · Mobile App</span><h3>Isla Island-Hopper App</h3></div>
-      </article>
-      <article class="project-card">
-        <div class="project-thumb"><div class="g" style="background:linear-gradient(135deg,#13224B,#6C5BB5,#4C6CCB)"></div><div class="device"><div class="device-frame"></div></div><div class="overlay"><a href="#" class="view-case">View Case Study →</a></div></div>
-        <div class="project-body"><span class="project-cat">SaaS · Design System</span><h3>Northline Analytics Suite</h3></div>
-      </article>
-    </div>
-  </div>
-</section> -->
-
 <!-- SKILLS -->
-<section class="pad" id="skills" style="background:var(--bg-alt);">
+<section class="pad" id="skills" style="background:var(--surface);">
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">Skills &amp; Tools</span>
@@ -255,66 +241,57 @@
   </div>
 </section>
 
-<!-- TESTIMONIALS
-<section class="pad">
-  <div class="wrap">
-    <div class="section-head">
-      <span class="eyebrow">Testimonials</span>
-      <h2>What clients say</h2>
-    </div>
-    <div class="testi-grid">
-      <div class="testi-card">
-        <div class="stars">★★★★★</div>
-        <p class="quote">Kimberly took a messy internal tool and turned it into something our whole team actually enjoys using. Communication was clear the entire way through.</p>
-        <div class="testi-who"><div class="testi-avatar">MS</div><div><b>Maria Santos</b><span>Product Lead, Pesolink</span></div></div>
-      </div>
-      <div class="testi-card">
-        <div class="stars">★★★★★</div>
-        <p class="quote">Thoughtful, detail-oriented, and genuinely curious about our users. The research phase alone gave us insights we'd been missing for years.</p>
-        <div class="testi-who"><div class="testi-avatar">JD</div><div><b>Jared Dela Cruz</b><span>Founder, Kape Roasters</span></div></div>
-      </div>
-      <div class="testi-card">
-        <div class="stars">★★★★★</div>
-        <p class="quote">Our booking flow finally makes sense. Patients stopped calling to ask "how do I reschedule" — that alone paid for the project.</p>
-        <div class="testi-who"><div class="testi-avatar">AR</div><div><b>Anna Reyes</b><span>Clinic Administrator</span></div></div>
-      </div>
-    </div>
-  </div>
-</section> -->
-
-<!-- CONTACT -->
+<!-- CONTACT SECTION (REVISED v1.1 — SIGNPOST & CTA ONLY, NO FORM) -->
 <section class="pad" id="contact" style="background:var(--bg-alt);">
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">Get In Touch</span>
       <h2>Let's build something intuitive</h2>
-      <p>Have a project in mind? Send a few details and I'll follow up within one business day.</p>
+      <p>Ready to bring your product vision to life? Start a formal inquiry or connect directly through our studio channels.</p>
     </div>
-    <div class="contact-grid">
-      <form class="contact-form" onsubmit="event.preventDefault();">
-        <div class="form-row">
-          <div class="field"><label for="name">Name</label><input id="name" type="text" placeholder="Your full name"></div>
-          <div class="field"><label for="email">Email</label><input id="email" type="email" placeholder="you@example.com"></div>
+    
+    <div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:40px;align-items:stretch;">
+      
+      <!-- Primary CTA Banner (Directs to Canonical Intake) -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:48px 40px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:var(--shadow-md);">
+        <div>
+          <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:var(--light-blue);color:var(--navy);font-size:12px;font-weight:700;margin-bottom:20px;">
+            <iconify-icon icon="lucide:sparkles" style="color:var(--blue);font-size:14px;"></iconify-icon>
+            Canonical Project Intake
+          </div>
+          <h3 style="font-size:26px;font-weight:800;color:var(--text);margin-bottom:14px;line-height:1.25;">Have a project in mind?</h3>
+          <p style="font-size:15px;color:var(--text-soft);line-height:1.7;margin-bottom:28px;">
+            Whether you need a complete mobile app overhaul, a scalable design system, or usability research for your SaaS platform, submit our single project inquiry form to receive a tailored proposal and consultation link.
+          </p>
         </div>
-        <div class="field full" style="margin-bottom:18px;"><label for="subject">Subject</label><input id="subject" type="text" placeholder="What's this about?"></div>
-        <div class="field full" style="margin-bottom:24px;"><label for="message">Message</label><textarea id="message" placeholder="Tell me a bit about your project..."></textarea></div>
-        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Send Message</button>
-      </form>
-      <div class="contact-side">
+        <div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;">
+            <a href="03-inquiry.html" class="btn btn-primary" style="padding:16px 36px;font-size:15px;">Start a Project →</a>
+            <a href="02-book-consultation.html" class="btn btn-outline" style="padding:16px 28px;font-size:15px;">Book Consultation</a>
+          </div>
+          <p style="font-size:12px;color:var(--text-faint);margin-top:14px;">Response time: within 1 business day · Based in Dumaguete City, PH</p>
+        </div>
+      </div>
+
+      <!-- Studio Information & Direct Channels -->
+      <div style="display:flex;flex-direction:column;gap:16px;justify-content:space-between;">
         <div class="info-card">
           <div class="info-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
-          <div><b>Location</b><span>Dumaguete City, Philippines</span></div>
+          <div><b>Studio Location</b><span>Dumaguete City, Negros Oriental, Philippines</span></div>
         </div>
+        
         <div class="info-card">
           <div class="info-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg></div>
-          <div><b>Email</b><span>antigokimberlyjayne@gmail.com</span></div>
+          <div><b>Direct Email</b><span>antigokimberlyjayne@gmail.com</span></div>
         </div>
+        
         <div class="info-card">
           <div class="info-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.3 1.8.6 2.7a2 2 0 01-.4 2.1L8 9.9a16 16 0 006 6l1.4-1.4a2 2 0 012.1-.4c.9.3 1.8.5 2.7.6a2 2 0 011.8 2z"/></svg></div>
-          <div><b>Phone</b><span>+63 968 329 5856</span></div>
+          <div><b>Mobile</b><span>+63 968 329 5856</span></div>
         </div>
+        
         <div class="info-card" style="flex-direction:column;align-items:flex-start;">
-          <b style="margin-bottom:4px;">Follow along</b>
+          <b style="margin-bottom:8px;">Follow &amp; Connect</b>
           <div class="social-row">
             <a href="#" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg></a>
             <a href="#" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg></a>
@@ -344,20 +321,22 @@
         <p>Designing Experiences. Driving Impact. A UI/UX advisory practice creating intuitive digital experiences that bridge user needs with business goals.</p>
       </div>
       <div class="footer-col">
-        <h4>Quick Links</h4>
+        <h4>Navigation</h4>
         <ul>
-      <li><a href="#home">Home</a></li>
-      <li><a href="#about">About</a></li>
-      <li><a href="#services">Services</a></li>
-      <li><a href="#skills">Skills</a></li>
-      <li><a href="#contact">Contact</a></li>
+          <li><a href="#home">Home</a></li>
+          <li><a href="#about">About</a></li>
+          <li><a href="#services">Services</a></li>
+          <li><a href="#skills">Skills</a></li>
+          <li><a href="03-inquiry.html">Start a Project</a></li>
+          <li><a href="02-book-consultation.html">Book Consultation</a></li>
+          <li><a href="01-login.html">Client Portal</a></li>
         </ul>
       </div>
       <div class="footer-col">
         <h4>Contact</h4>
         <ul>
-          <li><a href="#">antigokimberlyjayne@gmail.com</a></li>
-          <li><a href="#">+63 968 329 5856</a></li>
+          <li><a href="mailto:antigokimberlyjayne@gmail.com">antigokimberlyjayne@gmail.com</a></li>
+          <li><a href="tel:+639683295856">+63 968 329 5856</a></li>
           <li><a href="#">Dumaguete City, Philippines</a></li>
         </ul>
       </div>
@@ -375,8 +354,9 @@
   </div>
 </footer>
 
+<script src="js/app-data.js"></script>
 <script>
-  // theme toggle (in-memory only, no storage APIs)
+  // theme toggle
   const toggle = document.getElementById('themeToggle');
   toggle.addEventListener('click', () => {
     const root = document.documentElement;
@@ -389,14 +369,6 @@
     entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in-view'); });
   }, { threshold: .4 });
   bars.forEach(b => io.observe(b));
-
-  // portfolio tab visual state (static demo, no real filtering logic needed for mockup)
-  document.querySelectorAll('.tab').forEach(t => {
-    t.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-      t.classList.add('active');
-    });
-  });
 </script>
 
 </body>
