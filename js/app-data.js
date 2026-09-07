@@ -1,6 +1,5 @@
 /**
- * Antigo Web App - Shared Data Layer (Phase 1 LocalStorage Prototype)
- * Handles state persistence for Inquiries, Bookings, Projects, Messages, and Sessions.
+ * Handle for Inquiries, Bookings, Projects, Messages, and Sessions.
  */
 
 const AntigoData = {
@@ -350,5 +349,5 @@ const AntigoData = {
     }
 };
 
-// Initialize seed on script load
+// Initialize
 AntigoData.init();
