@@ -286,7 +286,7 @@ session_start();
         
         <div class="info-card">
           <div class="info-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg></div>
-          <div><b>Direct Email (Quick Questions)</b><a href="mailto:antigokimberlyjayne@gmail.com" style="color:var(--blue);font-weight:500;">antigokimberlyjayne@gmail.com</a></div>
+          <div><b>Direct Email (Quick Questions)</b><span>antigokimberlyjayne@gmail.com</span></div>
         </div>
         
         <div class="info-card">
