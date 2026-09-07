@@ -1,3 +1,9 @@
+<?php
+
+require_once 'config/session.php';
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Location: login.php'); exit; }
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -527,7 +533,7 @@
 
         function handleLogout() {
             AntigoData.logout();
-            window.location.href = 'login.php';
+            window.location.href = 'logout.php';
         }
     </script>
 </body>
