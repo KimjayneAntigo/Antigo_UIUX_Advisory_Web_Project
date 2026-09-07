@@ -1,7 +1,8 @@
 <?php
-require_once 'config/session.php';
-if (!isset($_SESSION['user_id'])) { header('Location: login.php'); exit; }
+
+require_once 'client-dashboard.php';
 ?>
+    
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -410,7 +411,7 @@ if (!isset($_SESSION['user_id'])) { header('Location: login.php'); exit; }
 
         function handleLogout() {
             AntigoData.logout();
-            window.location.href = 'login.php';
+            window.location.href = 'logout.php';
         }
     </script>
 </body>
