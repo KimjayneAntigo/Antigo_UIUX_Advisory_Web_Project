@@ -1,3 +1,6 @@
+<?php
+session_start();
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -33,8 +36,17 @@
         <svg class="moon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>
         <svg class="sun" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
       </button>
-      <a href="01-login.html" class="btn btn-outline btn-sm">Client Portal</a>
-      <a href="03-inquiry.html" class="btn btn-primary btn-sm">Start a Project</a>
+      <?php if (isset($_SESSION['user_id'])): ?>
+        <?php if ($_SESSION['role'] === 'admin'): ?>
+          <a href="admin-dashboard.php" class="btn btn-outline btn-sm">Admin Dashboard</a>
+        <?php else: ?>
+          <a href="client-dashboard.php" class="btn btn-outline btn-sm">Login</a>
+        <?php endif; ?>
+        <a href="logout.php" class="btn btn-outline btn-sm">Log Out</a>
+      <?php else: ?>
+        <a href="login.php" class="btn btn-outline btn-sm">Login</a>
+      <?php endif; ?>
+      <a href="inquiry.php" class="btn btn-primary btn-sm">Start a Project</a>
       <button class="burger" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     </div>
   </nav>
@@ -327,9 +339,9 @@
           <li><a href="#about">About</a></li>
           <li><a href="#services">Services</a></li>
           <li><a href="#skills">Skills</a></li>
-          <li><a href="03-inquiry.html">Start a Project</a></li>
-          <li><a href="02-book-consultation.html">Book Consultation</a></li>
-          <li><a href="01-login.html">Client Portal</a></li>
+          <li><a href="inquiry.php">Start a Project</a></li>
+          <li><a href="book-consultation.php">Book Consultation</a></li>
+          <li><a href="login.php">Client Portal</a></li>
         </ul>
       </div>
       <div class="footer-col">
