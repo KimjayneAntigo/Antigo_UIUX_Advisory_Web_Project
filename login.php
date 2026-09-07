@@ -1,11 +1,58 @@
 <?php
 session_start();
 
+// If already logged in, redirect to the appropriate dashboard.
 if (isset($_SESSION['user_id'])) {
-    if ($_SESSION['role'] === 'admin') { header('Location: admin-dashboard.php'); }
-    else { header('Location: client-dashboard.php'); }
+    if ($_SESSION['role'] === 'admin') {
+        header('Location: admin-dashboard.php');
+    } else {
+        header('Location: client-dashboard.php');
+    }
     exit;
 }
+
+require_once 'config/db.php';
+
+$error   = '';
+$success = '';
+
+// POST HANDLER
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $email    = trim($_POST['email']    ?? '');
+    $password =      $_POST['password'] ?? '';
+
+    if (empty($email) || empty($password)) {
+        $error = 'Please enter both email and password.';
+    } else {
+        // Lookup user by email via prepared statement
+        $stmt = $pdo->prepare('SELECT id, name, email, password_hash, role FROM users WHERE email = ? LIMIT 1');
+        $stmt->execute([$email]);
+        $user = $stmt->fetch();
+
+        // Generic error message
+        if (!$user || !password_verify($password, $user['password_hash'])) {
+            $error = 'Invalid email or password. Please try again.';
+        } else {
+            // prevent session attacks
+            session_regenerate_id(true);
+
+            $_SESSION['user_id']   = $user['id'];
+            $_SESSION['user_name'] = $user['name'];
+            $_SESSION['email']     = $user['email'];
+            $_SESSION['role']      = $user['role'];
+
+            if ($user['role'] === 'admin') {
+                header('Location: admin-dashboard.php');
+            } else {
+                header('Location: client-dashboard.php');
+            }
+            exit;
+        }
+    }
+}
+
+// flash message ("account exists, please log in")
+$flash = $_GET['msg'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -13,15 +60,15 @@ if (isset($_SESSION['user_id'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Log In | Antigo UI/UX Advisory</title>
-    
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
+
     <!-- Iconify -->
     <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
-    
+
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -29,141 +76,88 @@ if (isset($_SESSION['user_id'])) {
             theme: {
                 extend: {
                     colors: {
-                        navy: '#13224B',
-                        violet: '#6C5BB5',
-                        brandBlue: '#4C6CCB',
+                        navy:         '#13224B',
+                        violet:       '#6C5BB5',
+                        brandBlue:    '#4C6CCB',
                         'light-blue': '#DDEBFF',
                         'light-gray': '#F4F6F8',
-                        'dark-gray': '#4b4b4b',
-                        'text-primary': '#13224B',
-                        'text-soft': '#4b4b4b',
+                        'dark-gray':  '#4b4b4b',
+                        'text-primary':'#13224B',
+                        'text-soft':  '#4b4b4b',
                         'text-faint': '#8890AA',
-                        'surface-alt': '#F4F6F8',
+                        'surface-alt':'#F4F6F8',
                     },
-                    fontFamily: {
-                        poppins: ['Poppins', 'sans-serif'],
-                    }
+                    fontFamily: { poppins: ['Poppins', 'sans-serif'] }
                 }
             }
         }
     </script>
-    
+
     <style>
         :root {
-            --navy: #13224B;
-            --violet: #6C5BB5;
-            --blue: #4C6CCB;
-            --white: #FFFFFF;
-            --light-blue: #DDEBFF;
-            --light-gray: #F4F6F8;
-            --dark-gray: #4b4b4b;
-            --text: #13224B;
-            --text-soft: #4b4b4b;
-            --text-faint: #8890AA;
-            --surface: #FFFFFF;
+            --navy:        #13224B;
+            --violet:      #6C5BB5;
+            --blue:        #4C6CCB;
+            --white:       #FFFFFF;
+            --light-blue:  #DDEBFF;
+            --light-gray:  #F4F6F8;
+            --dark-gray:   #4b4b4b;
+            --text:        #13224B;
+            --text-soft:   #4b4b4b;
+            --text-faint:  #8890AA;
+            --surface:     #FFFFFF;
             --surface-alt: #F4F6F8;
-            --border: rgba(19, 34, 75, 0.09);
-            --grad: linear-gradient(100deg, #13224B 0%, #6C5BB5 55%, #4C6CCB 100%);
-            --grad-soft: linear-gradient(135deg, #4C6CCB, #6C5BB5);
-            --success: #10b981;
-            --error: #ef4444;
-            --warning: #f59e0b;
+            --border:      rgba(19, 34, 75, 0.09);
+            --grad:        linear-gradient(100deg, #13224B 0%, #6C5BB5 55%, #4C6CCB 100%);
+            --grad-soft:   linear-gradient(135deg, #4C6CCB, #6C5BB5);
+            --success:     #10b981;
+            --error:       #ef4444;
         }
 
         body {
             font-family: 'Poppins', sans-serif;
             background-color: var(--surface-alt);
             color: var(--text);
-            margin: 0;
-            padding: 0;
+            margin: 0; padding: 0;
         }
 
         .brand-gradient-panel {
             background: linear-gradient(135deg, #13224B 0%, #1c2c5e 40%, #6C5BB5 75%, #4C6CCB 100%);
         }
 
-        .auth-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            box-shadow: 0 20px 50px -15px rgba(19, 34, 75, 0.12);
-        }
-
-        .role-pill {
-            transition: all 0.25s ease;
-        }
-
-        .role-pill.active {
-            background: var(--grad);
-            color: #FFFFFF;
-            box-shadow: 0 4px 14px rgba(76, 108, 203, 0.35);
-        }
-
-        .role-pill:not(.active) {
-            color: var(--text-faint);
-            background: transparent;
-        }
-
         .input-field {
             background: var(--surface-alt);
             border: 1px solid var(--border);
             color: var(--navy);
-            transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+            transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
         }
-
         .input-field:focus {
             outline: none;
             border-color: var(--violet);
             background: #FFFFFF;
-            box-shadow: 0 0 0 3px rgba(108, 91, 181, 0.12);
+            box-shadow: 0 0 0 3px rgba(108,91,181,.12);
         }
 
         .btn-brand-primary {
             background: var(--grad);
             color: #FFFFFF;
-            box-shadow: 0 14px 28px -10px rgba(76, 108, 203, 0.45);
-            transition: transform 0.25s ease, box-shadow 0.25s ease;
+            box-shadow: 0 14px 28px -10px rgba(76,108,203,.45);
+            transition: transform .25s ease, box-shadow .25s ease;
         }
-
         .btn-brand-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 18px 34px -8px rgba(76, 108, 203, 0.6);
+            box-shadow: 0 18px 34px -8px rgba(76,108,203,.6);
         }
 
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            text-decoration: none;
-        }
-        .logo-mark {
-            height: 38px;
-            width: auto;
-            max-width: 54px;
-            flex-shrink: 0;
-            object-fit: contain;
-        }
-        .logo-text {
-            line-height: 1.15;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-        .logo-text .word {
-            font-weight: 800;
-            font-size: 18px;
-            letter-spacing: 0.05em;
-            color: var(--navy);
-            line-height: 1.1;
-        }
-        .logo-text .sub {
-            font-size: 9px;
-            letter-spacing: 0.22em;
-            color: var(--violet);
-            text-transform: uppercase;
-            font-weight: 700;
-            line-height: 1.1;
-            margin-top: 2px;
-        }
+        .role-pill          { transition: all .25s ease; }
+        .role-pill.active   { background: var(--grad); color:#FFFFFF; box-shadow: 0 4px 14px rgba(76,108,203,.35); }
+        .role-pill:not(.active) { color: var(--text-faint); background: transparent; }
+
+        .logo { display:flex; align-items:center; gap:12px; text-decoration:none; }
+        .logo-mark { height:38px; width:auto; max-width:54px; flex-shrink:0; object-fit:contain; }
+        .logo-text { line-height:1.15; display:flex; flex-direction:column; justify-content:center; }
+        .logo-text .word { font-weight:800; font-size:18px; letter-spacing:.05em; color:var(--navy); line-height:1.1; }
+        .logo-text .sub  { font-size:9px; letter-spacing:.22em; color:var(--violet); text-transform:uppercase; font-weight:700; line-height:1.1; margin-top:2px; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between">
@@ -188,10 +182,9 @@ if (isset($_SESSION['user_id'])) {
     <!-- Main Auth Section -->
     <main class="flex-1 flex items-center justify-center p-4 sm:p-8 lg:p-12">
         <div class="w-full max-w-[1060px] min-h-[580px] bg-white rounded-3xl overflow-hidden border border-[rgba(19,34,75,0.08)] shadow-2xl flex flex-col lg:flex-row">
-            
-            <!-- Left Side: Brand Panel -->
+
+            <!-- Left: Brand Panel -->
             <div class="lg:w-5/12 brand-gradient-panel p-8 sm:p-12 text-white flex flex-col justify-between relative overflow-hidden">
-                <!-- Background ambient circles -->
                 <div class="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-white/5 blur-2xl pointer-events-none"></div>
                 <div class="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-[#6C5BB5]/30 blur-2xl pointer-events-none"></div>
 
@@ -210,9 +203,7 @@ if (isset($_SESSION['user_id'])) {
 
                 <div class="relative z-10 pt-8 mt-8 border-t border-white/10">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold text-xs">
-                            KA
-                        </div>
+                        <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold text-xs">KA</div>
                         <div>
                             <div class="text-sm font-bold">Kimberly Jayne Antigo</div>
                             <div class="text-xs text-white/70">Founder &amp; Principal Consultant</div>
@@ -221,7 +212,7 @@ if (isset($_SESSION['user_id'])) {
                 </div>
             </div>
 
-            <!-- Right Side: Login Form -->
+            <!-- Right: Login Form -->
             <div class="lg:w-7/12 p-8 sm:p-12 flex flex-col justify-between">
                 <div>
                     <!-- Header & Role Switcher -->
@@ -230,25 +221,41 @@ if (isset($_SESSION['user_id'])) {
                             <h1 class="text-2xl sm:text-3xl font-extrabold text-[#13224B]">Log In</h1>
                             <p class="text-xs sm:text-sm text-[#4b4b4b] mt-1">Select your account role to continue</p>
                         </div>
-                        <!-- Role Toggle -->
+                        <!-- Role Toggle (visual only — actual role determined by DB) -->
                         <div class="inline-flex bg-[#F4F6F8] p-1 rounded-full border border-[rgba(19,34,75,0.08)] self-start sm:self-auto">
-                            <button type="button" id="role-client" onclick="setRole('client')" class="role-pill active px-5 py-2 rounded-full text-xs font-bold transition-all">
-                                Client
-                            </button>
-                            <button type="button" id="role-admin" onclick="setRole('admin')" class="role-pill px-5 py-2 rounded-full text-xs font-bold transition-all">
-                                Admin
-                            </button>
+                            <button type="button" id="role-client" onclick="setRole('client')" class="role-pill active px-5 py-2 rounded-full text-xs font-bold">Client</button>
+                            <button type="button" id="role-admin"  onclick="setRole('admin')"  class="role-pill px-5 py-2 rounded-full text-xs font-bold">Admin</button>
                         </div>
                     </div>
 
-                    <!-- Form -->
-                    <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-5">
-                        <div id="error-banner" class="hidden p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-medium"></div>
+                    <!-- Flash message (redirected from register page) -->
+                    <?php if ($flash === 'account_exists'): ?>
+                    <div class="mb-5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium flex items-center gap-2">
+                        <iconify-icon icon="lucide:info"></iconify-icon>
+                        An account with this email already exists — please log in.
+                    </div>
+                    <?php endif; ?>
+
+                    <!-- PHP error banner -->
+                    <?php if ($error): ?>
+                    <div id="error-banner" class="mb-5 p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-medium flex items-center gap-2">
+                        <iconify-icon icon="lucide:alert-circle"></iconify-icon>
+                        <?= htmlspecialchars($error) ?>
+                    </div>
+                    <?php endif; ?>
+
+                    <!-- Form — POSTs to this same page -->
+                    <form method="POST" action="login.php" class="space-y-5" novalidate>
+                        <!-- Client-side validation error (JS only, no server round-trip needed) -->
+                        <div id="js-error" class="hidden p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-medium"></div>
+
+                        <input type="hidden" name="intended_role" id="intended_role" value="client">
 
                         <div>
                             <label for="email" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Email Address</label>
                             <div class="relative">
-                                <input type="email" id="email" required placeholder="name@company.com" value="demo@client.com"
+                                <input type="email" id="email" name="email" required placeholder="name@company.com"
+                                       value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
                                        class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium">
                                 <iconify-icon icon="lucide:mail" class="absolute right-4 top-4 text-[#8890AA] text-lg pointer-events-none"></iconify-icon>
                             </div>
@@ -260,17 +267,10 @@ if (isset($_SESSION['user_id'])) {
                                 <a href="javascript:void(0)" onclick="openForgotModal()" class="text-xs text-[#6C5BB5] font-semibold hover:underline">Forgot password?</a>
                             </div>
                             <div class="relative">
-                                <input type="password" id="password" required placeholder="••••••••" value="password"
+                                <input type="password" id="password" name="password" required placeholder="••••••••"
                                        class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium">
                                 <iconify-icon icon="lucide:lock" class="absolute right-4 top-4 text-[#8890AA] text-lg pointer-events-none"></iconify-icon>
                             </div>
-                        </div>
-
-                        <div class="flex items-center justify-between text-xs pt-1">
-                            <label class="flex items-center gap-2 cursor-pointer select-none text-[#4b4b4b]">
-                                <input type="checkbox" id="rememberMe" checked class="rounded text-[#4C6CCB] focus:ring-[#4C6CCB]">
-                                <span>Remember my login</span>
-                            </label>
                         </div>
 
                         <button type="submit" class="btn-brand-primary w-full py-4 rounded-xl font-bold uppercase text-xs tracking-wider flex items-center justify-center gap-2">
@@ -278,32 +278,20 @@ if (isset($_SESSION['user_id'])) {
                             <iconify-icon icon="lucide:arrow-right" class="text-base"></iconify-icon>
                         </button>
                     </form>
-                </div>
 
-                <!-- Phase 1 Demo Accounts Notice -->
-                <div class="mt-8 pt-6 border-t border-[rgba(19,34,75,0.08)]">
-                    <div class="flex items-center justify-between mb-3">
-                        <span class="text-[11px] font-bold uppercase tracking-wider text-[#8890AA] flex items-center gap-1.5">
-                            <iconify-icon icon="lucide:terminal" class="text-[#6C5BB5]"></iconify-icon>
-                            Phase 1 Demo Accounts
-                        </span>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <button type="button" onclick="fillDemo('client')" class="text-left p-2.5 rounded-lg bg-[#F4F6F8] hover:bg-[#DDEBFF] border border-[rgba(19,34,75,0.06)] transition-all">
-                            <div class="font-bold text-[#13224B]">Client Account</div>
-                            <div class="text-[11px] text-[#4b4b4b] truncate">demo@client.com (password)</div>
-                        </button>
-                        <button type="button" onclick="fillDemo('admin')" class="text-left p-2.5 rounded-lg bg-[#F4F6F8] hover:bg-[#DDEBFF] border border-[rgba(19,34,75,0.06)] transition-all">
-                            <div class="font-bold text-[#13224B]">Admin Account</div>
-                            <div class="text-[11px] text-[#4b4b4b] truncate">admin@antigo.com (password)</div>
-                        </button>
+                    <!-- Register CTA -->
+                    <div class="mt-6 pt-5 border-t border-[rgba(19,34,75,0.07)] text-center">
+                        <p class="text-xs text-[#8890AA]">
+                            New here after submitting an inquiry?
+                            <a href="register.php" class="text-[#6C5BB5] font-semibold hover:underline ml-1">Create your client account →</a>
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- Forgot Password Modal -->
+    <!-- Forgot Password Modal (frontend-only wire up email handler) -->
     <div id="forgotModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-md w-full p-6 sm:p-8 border border-[rgba(19,34,75,0.08)] shadow-2xl relative">
             <button onclick="closeForgotModal()" class="absolute right-4 top-4 text-[#8890AA] hover:text-[#13224B] p-2">
@@ -313,7 +301,7 @@ if (isset($_SESSION['user_id'])) {
                 <iconify-icon icon="lucide:key-round"></iconify-icon>
             </div>
             <h3 class="text-xl font-bold text-[#13224B] mb-2">Reset Password</h3>
-            <p class="text-xs sm:text-sm text-[#4b4b4b] mb-6">Enter your registered email address and we'll send you a password recovery verification link.</p>
+            <p class="text-xs sm:text-sm text-[#4b4b4b] mb-6">Enter your registered email and we'll send a password recovery link. (Phase 2: email integration)</p>
             <div class="space-y-4">
                 <input type="email" placeholder="you@company.com" class="input-field w-full px-4 py-3 rounded-xl text-sm font-medium">
                 <button type="button" onclick="handleForgotSubmit()" class="btn-brand-primary w-full py-3.5 rounded-xl font-bold uppercase text-xs tracking-wider">
@@ -323,78 +311,28 @@ if (isset($_SESSION['user_id'])) {
         </div>
     </div>
 
-    <!-- Minimal Footer -->
+    <!-- Footer -->
     <footer class="w-full py-6 text-center text-xs text-[#8890AA] border-t border-[rgba(19,34,75,0.06)] bg-white">
         &copy; 2026 Antigo UI/UX Advisory. All rights reserved.
     </footer>
 
-    <script src="js/app-data.js"></script>
     <script>
         let currentRole = 'client';
 
         function setRole(role) {
             currentRole = role;
-            const clientBtn = document.getElementById('role-client');
-            const adminBtn = document.getElementById('role-admin');
-            const btnText = document.getElementById('btn-text');
-            const emailInput = document.getElementById('email');
-
-            if (role === 'client') {
-                clientBtn.classList.add('active');
-                adminBtn.classList.remove('active');
-                btnText.innerText = 'Sign In as Client';
-                emailInput.value = 'demo@client.com';
-            } else {
-                adminBtn.classList.add('active');
-                clientBtn.classList.remove('active');
-                btnText.innerText = 'Sign In as Admin';
-                emailInput.value = 'admin@antigo.com';
-            }
+            document.getElementById('role-client').classList.toggle('active', role === 'client');
+            document.getElementById('role-admin').classList.toggle('active',  role === 'admin');
+            document.getElementById('btn-text').innerText = role === 'client' ? 'Sign In as Client' : 'Sign In as Admin';
+            document.getElementById('intended_role').value = role;
         }
 
-        function fillDemo(role) {
-            setRole(role);
-            document.getElementById('password').value = 'password';
-        }
-
-        function handleLogin(e) {
-            e.preventDefault();
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value;
-            const errorBanner = document.getElementById('error-banner');
-
-            if (!email || !password) {
-                errorBanner.innerText = 'Please enter both email and password.';
-                errorBanner.classList.remove('hidden');
-                return;
-            }
-
-            if (password.length < 6) {
-                errorBanner.innerText = 'Password must be at least 6 characters.';
-                errorBanner.classList.remove('hidden');
-                return;
-            }
-
-            // Authenticate and save session
-            AntigoData.login(currentRole, email);
-
-            if (currentRole === 'admin') {
-                window.location.href = 'admin-dashboard.php';
-            } else {
-                window.location.href = 'client-dashboard.php';
-            }
-        }
-
-        function openForgotModal() {
-            document.getElementById('forgotModal').classList.remove('hidden');
-        }
-
-        function closeForgotModal() {
-            document.getElementById('forgotModal').classList.add('hidden');
-        }
+        function openForgotModal()  { document.getElementById('forgotModal').classList.remove('hidden'); }
+        function closeForgotModal() { document.getElementById('forgotModal').classList.add('hidden');    }
 
         function handleForgotSubmit() {
-            alert('Password recovery link sent! Check your inbox.');
+            // POST to password reset handler, send email
+            alert('Password recovery link sent! Check your inbox. (Phase 2 feature)');
             closeForgotModal();
         }
     </script>
