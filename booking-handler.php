@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// ── INPUT COLLECTION & SANITISATION ─────────────────────────────────────────
+// INPUT COLLECTION & SANITISATION
 $guest_name   = trim($_POST['guest_name']   ?? '');
 $guest_email  = trim($_POST['guest_email']  ?? '');
 $service      = trim($_POST['service']      ?? '');
@@ -26,10 +26,10 @@ $inquiry_id   = isset($_POST['inquiry_id']) ? (int)$_POST['inquiry_id'] : null;
 // Allowed values
 $allowed_services = ['UI Design','UX Research','Wireframing','Interactive Prototyping','Responsive Web Design','Design Systems'];
 $allowed_durations= [30, 60];
-$allowed_formats  = ['Video Call (Google Meet)','Phone Call (+63)','In-Person Studio (Dumaguete)'];
+$allowed_formats  = ['Video Call (Google Meet)','Zoom Meet (Zoom)','In-Person Studio (Cebu City)'];
 $allowed_times    = ['09:00 AM','10:00 AM','11:30 AM','01:30 PM','03:00 PM','04:30 PM'];
 
-// ── VALIDATION ───────────────────────────────────────────────────────────────
+// VALIDATION
 $errors = [];
 
 $user_id = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
@@ -59,12 +59,12 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_raw)) {
 
 // Sanity-check price (server-side; client cannot set arbitrary amounts)
 $price_map = [
-    'UI Design'               => ['30' => 25000, '60' => 45000],
-    'UX Research'             => ['30' => 30000, '60' => 50000],
-    'Wireframing'             => ['30' => 20000, '60' => 35000],
-    'Interactive Prototyping' => ['30' => 40000, '60' => 70000],
-    'Responsive Web Design'   => ['30' => 50000, '60' => 90000],
-    'Design Systems'          => ['30' => 60000, '60' => 100000],
+    'UI Design'               => ['30' => 250.00, '60' => 450.00],
+    'UX Research'             => ['30' => 300.00, '60' => 500.00],
+    'Wireframing'             => ['30' => 200.00, '60' => 350.00],
+    'Interactive Prototyping' => ['30' => 400.00, '60' => 700.00],
+    'Responsive Web Design'   => ['30' => 500.00, '60' => 900.00],
+    'Design Systems'          => ['30' => 600.00, '60' => 1000.00],
 ];
 $server_price = $price_map[$service][(string)$duration] ?? null;
 if ($server_price === null) {
@@ -79,7 +79,7 @@ if (!empty($errors)) {
     exit;
 }
 
-// ── Resolve guest identity ────────────────────────────────────────────────────
+// Resolve guest identity
 // If a logged-in client is booking, pull their name and email from session
 if ($user_id) {
     $guest_name  = $_SESSION['user_name'];
@@ -94,7 +94,7 @@ if (empty($guest_name) && $inquiry_id) {
     if ($inq) { $guest_name = $inq['name']; $guest_email = $inq['email']; }
 }
 
-// ── INSERT INTO BOOKINGS ─────────────────────────────────────────────────────
+// INSERT INTO BOOKINGS
 $stmt = $pdo->prepare(
     'INSERT INTO bookings
         (user_id, inquiry_id, guest_name, guest_email,
@@ -120,14 +120,14 @@ $stmt->execute([
 
 $new_booking_id = (int) $pdo->lastInsertId();
 
-// ── STORE TRUSTED-SESSION TOKEN ──────────────────────────────────────────────
+// STORE TRUSTED-SESSION TOKEN
 // SECURITY: Stored by row ID, not email — register.php links ONLY this
 // specific booking to the new account (trusted-session linking pattern).
 if (!$user_id) {
     $_SESSION['pending_link_booking_id'] = $new_booking_id;
 }
 
-// ── SUCCESS RESPONSE ─────────────────────────────────────────────────────────
+// SUCCESS RESPONSE
 echo json_encode([
     'success'    => true,
     'booking_id' => 'BKG-' . str_pad($new_booking_id, 4, '0', STR_PAD_LEFT),
@@ -135,7 +135,7 @@ echo json_encode([
     'service'    => $service,
     'date'       => $booking_date->format('M j, Y'),
     'time'       => $time_raw,
-    'price'      => '₱' . number_format($price),
+    'price'      => '$' . number_format($price, 2),
     'format'     => $format,
 ]);
 exit;
