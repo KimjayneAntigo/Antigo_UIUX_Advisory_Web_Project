@@ -1,6 +1,5 @@
 <?php
 /**
- * includes/auth-check-admin.php
  * Require an authenticated admin session; redirect to login otherwise.
  */
 require_once __DIR__ . '/../config/session.php';
