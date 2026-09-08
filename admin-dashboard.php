@@ -210,8 +210,8 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
                         <iconify-icon icon="lucide:circle-dollar-sign"></iconify-icon>
                     </div>
                 </div>
-                <div class="text-3xl font-extrabold text-[#13224B]" id="statPipelineValue">₱550,000</div>
-                <div class="text-xs text-[#127A45] font-semibold mt-1">Total Pipeline (₱ PHP)</div>
+                <div class="text-3xl font-extrabold text-[#13224B]" id="statPipelineValue">$550,000</div>
+                <div class="text-xs text-[#127A45] font-semibold mt-1">Total Pipeline ($ USD)</div>
             </div>
         </div>
 
@@ -235,7 +235,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
                             <th class="py-3.5 px-4">Ref ID</th>
                             <th class="py-3.5 px-4">Lead Name &amp; Company</th>
                             <th class="py-3.5 px-4">Service</th>
-                            <th class="py-3.5 px-4">Budget Range (₱)</th>
+                            <th class="py-3.5 px-4">Budget Range ($)</th>
                             <th class="py-3.5 px-4">Timeline</th>
                             <th class="py-3.5 px-4">Status</th>
                             <th class="py-3.5 px-4 text-right">Actions</th>
@@ -265,7 +265,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
                             <th class="py-3.5 px-4">Booking ID</th>
                             <th class="py-3.5 px-4">Client</th>
                             <th class="py-3.5 px-4">Service &amp; Duration</th>
-                            <th class="py-3.5 px-4">Rate (₱)</th>
+                            <th class="py-3.5 px-4">Rate ($)</th>
                             <th class="py-3.5 px-4">Date &amp; Time</th>
                             <th class="py-3.5 px-4">Meeting Format</th>
                             <th class="py-3.5 px-4">Status</th>
@@ -314,8 +314,8 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
                     <strong class="text-[#13224B]" id="modalInqService">UI Design</strong>
                 </div>
                 <div>
-                    <span class="text-[#8890AA] block mb-1">Budget Band (₱)</span>
-                    <strong class="text-[#13224B]" id="modalInqBudget">₱150,000 – ₱300,000</strong>
+                    <span class="text-[#8890AA] block mb-1">Budget Band ($)</span>
+                    <strong class="text-[#13224B]" id="modalInqBudget">$150,000 – $300,000</strong>
                 </div>
                 <div>
                     <span class="text-[#8890AA] block mb-1">Ideal Timeline</span>
@@ -479,7 +479,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
                 container.insertAdjacentHTML('beforeend', cardHtml);
             });
 
-            document.getElementById('statPipelineValue').innerText = `₱${totalPipeline.toLocaleString()}`;
+            document.getElementById('statPipelineValue').innerText = `$${totalPipeline.toLocaleString()}`;
         }
 
         function openInquiryModal(id) {

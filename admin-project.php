@@ -188,7 +188,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
                         </div>
                         <div class="p-3.5 bg-[#F4F6F8] rounded-xl border border-[rgba(19,34,75,0.06)]">
                             <span class="text-[#8890AA] block mb-1">Contract Value</span>
-                            <strong class="text-sm font-extrabold text-[#4C6CCB]" id="adminBudget">₱250,000</strong>
+                            <strong class="text-sm font-extrabold text-[#4C6CCB]" id="adminBudget">$250,000</strong>
                         </div>
                         <div class="p-3.5 bg-[#F4F6F8] rounded-xl border border-[rgba(19,34,75,0.06)]">
                             <span class="text-[#8890AA] block mb-1">Due Date</span>

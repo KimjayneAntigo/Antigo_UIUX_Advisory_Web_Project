@@ -44,9 +44,9 @@ CREATE TABLE IF NOT EXISTS `inquiries` (
 
 -- Seed sample inquiries
 INSERT INTO `inquiries` (`ref_code`, `name`, `email`, `company`, `project_type`, `budget`, `timeline`, `description`, `status`) VALUES
-('INQ-1001', 'Maria Santos',   'maria@pesolink.com',  'Pesolink Financial Services', 'UI Design',    '₱150,000 – ₱300,000', '1 Month',   'Redesigning mobile banking dashboard for smoother digital transactions and better conversion.', 'new'),
-('INQ-1002', 'Juan dela Cruz', 'juan@visayas.ph',     'Visayas Health Care',          'UX Research',  '₱50,000 – ₱150,000',  '2–3 Months','Patient portal UX audit and user journey mapping for clinic management system.', 'contacted'),
-('INQ-1003', 'Ana Reyes',      'ana@cebu-tourism.ph', 'Cebu Tourism Board',           'Design Systems','₱300,000+',           'Flexible',  'Build a scalable design system for our tourism mobile and web properties.', 'reviewed');
+('INQ-1001', 'Maria Santos',   'maria@pesolink.com',  'Pesolink Financial Services', 'UI Design',    '$150,000 – $300,000', '1 Month',   'Redesigning mobile banking dashboard for smoother digital transactions and better conversion.', 'new'),
+('INQ-1002', 'Juan dela Cruz', 'juan@visayas.ph',     'Visayas Health Care',          'UX Research',  '$50,000 – $150,000',  '2–3 Months','Patient portal UX audit and user journey mapping for clinic management system.', 'contacted'),
+('INQ-1003', 'Ana Reyes',      'ana@cebu-tourism.ph', 'Cebu Tourism Board',           'Design Systems','$300,000+',           'Flexible',  'Build a scalable design system for our tourism mobile and web properties.', 'reviewed');
 
 -- BOOKINGS
 CREATE TABLE IF NOT EXISTS `bookings` (
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS `bookings` (
     `client_email` VARCHAR(180)  NOT NULL,
     `service`      VARCHAR(80)   NOT NULL,
     `duration`     VARCHAR(20)   NOT NULL COMMENT '30 min | 60 min',
-    `price`        VARCHAR(30)   NOT NULL COMMENT 'e.g. ₱45,000',
+    `price`        VARCHAR(30)   NOT NULL COMMENT 'e.g. $450',
     `date`         DATE          NOT NULL,
     `time`         VARCHAR(20)   NOT NULL COMMENT 'e.g. 10:00 AM',
     `format`       VARCHAR(80)   NOT NULL COMMENT 'Google Meet | Phone Call | In-Person Studio',
@@ -70,8 +70,8 @@ CREATE TABLE IF NOT EXISTS `bookings` (
 
 -- Seed sample bookings
 INSERT INTO `bookings` (`booking_code`, `inquiry_id`, `client_name`, `client_email`, `service`, `duration`, `price`, `date`, `time`, `format`, `status`) VALUES
-('BKG-2001', 1, 'Maria Santos',   'maria@pesolink.com', 'UI Design',   '60 min', '₱45,000', '2026-09-10', '10:00 AM', 'Video Call (Google Meet)', 'confirmed'),
-('BKG-2002', 2, 'Juan dela Cruz', 'juan@visayas.ph',    'UX Research', '60 min', '₱50,000', '2026-09-15', '02:00 PM', 'Video Call (Google Meet)', 'pending');
+('BKG-2001', 1, 'Maria Santos',   'maria@pesolink.com', 'UI Design',   '60 min', '$450', '2026-09-10', '10:00 AM', 'Video Call (Google Meet)', 'confirmed'),
+('BKG-2002', 2, 'Juan dela Cruz', 'juan@visayas.ph',    'UX Research', '60 min', '$500', '2026-09-15', '02:00 PM', 'Video Call (Google Meet)', 'pending');
 
 -- PROJECTS
 CREATE TABLE IF NOT EXISTS `projects` (
@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS `projects` (
     `client_name`    VARCHAR(120)  NOT NULL,
     `client_email`   VARCHAR(180)  DEFAULT NULL,
     `company`        VARCHAR(120)  DEFAULT NULL,
-    `budget`         VARCHAR(50)   NOT NULL COMMENT 'Display budget, e.g. ₱250,000',
+    `budget`         VARCHAR(50)   NOT NULL COMMENT 'Display budget, e.g. $250,000',
     `due_date`       DATE          NOT NULL,
     `current_phase`  TINYINT       NOT NULL DEFAULT 1 COMMENT '1–5',
     `phase_name`     VARCHAR(80)   NOT NULL DEFAULT 'Discovery & Research',
@@ -98,9 +98,9 @@ CREATE TABLE IF NOT EXISTS `projects` (
 
 -- Seed sample projects
 INSERT INTO `projects` (`project_code`, `title`, `category`, `client_name`, `client_email`, `company`, `budget`, `due_date`, `current_phase`, `phase_name`, `progress`, `status`, `status_type`) VALUES
-('PRJ-3001', 'Pesolink Mobile Banking Redesign',    'Fintech · Mobile App',    'Maria Santos',   'maria@pesolink.com', 'Pesolink Financial Services', '₱250,000', '2026-09-30', 3, 'UI/UX Design',         60, 'UI Design',  'in_design'),
-('PRJ-3002', 'Visayas Health Care Patient Portal',  'Healthcare · Web App',    'Juan dela Cruz', 'juan@visayas.ph',    'Visayas Health Care',          '₱180,000', '2026-10-15', 2, 'Wireframing',          40, 'Wireframing','in_design'),
-('PRJ-3003', 'Cebu Tourism Responsive Website',     'Tourism · Responsive Web','Ana Reyes',      'ana@cebu-tourism.ph','Cebu Tourism Board',            '₱120,000', '2026-11-30', 1, 'Discovery & Research', 20, 'Discovery',  'pending');
+('PRJ-3001', 'Pesolink Mobile Banking Redesign',    'Fintech · Mobile App',    'Maria Santos',   'maria@pesolink.com', 'Pesolink Financial Services', '$250,000', '2026-09-30', 3, 'UI/UX Design',         60, 'UI Design',  'in_design'),
+('PRJ-3002', 'Visayas Health Care Patient Portal',  'Healthcare · Web App',    'Juan dela Cruz', 'juan@visayas.ph',    'Visayas Health Care',          '$180,000', '2026-10-15', 2, 'Wireframing',          40, 'Wireframing','in_design'),
+('PRJ-3003', 'Cebu Tourism Responsive Website',     'Tourism · Responsive Web','Ana Reyes',      'ana@cebu-tourism.ph','Cebu Tourism Board',            '$120,000', '2026-11-30', 1, 'Discovery & Research', 20, 'Discovery',  'pending');
 
 -- PROJECT FILES
 CREATE TABLE IF NOT EXISTS `project_files` (

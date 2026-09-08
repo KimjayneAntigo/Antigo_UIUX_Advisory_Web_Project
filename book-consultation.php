@@ -333,7 +333,7 @@ require_once 'book-consultation.php';
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
                     
                     <!-- Card 1: UI Design -->
-                    <div onclick="selectServiceCard(this, 'UI Design', 25000, 45000)" class="service-card rounded-2xl p-6 cursor-pointer relative group overflow-hidden" data-name="UI Design" data-price30="25000" data-price60="45000">
+                    <div onclick="selectServiceCard(this, 'UI Design', 250.00, 450.00)" class="service-card rounded-2xl p-6 cursor-pointer relative group overflow-hidden" data-name="UI Design" data-price30="250.00" data-price60="450.00">
                         <div class="flex justify-between items-start mb-4">
                             <div class="w-12 h-12 bg-[#DDEBFF] rounded-xl flex items-center justify-center">
                                 <iconify-icon icon="lucide:layout" class="text-2xl text-[#4C6CCB]"></iconify-icon>
@@ -483,7 +483,7 @@ require_once 'book-consultation.php';
                             </div>
                             <div class="text-right">
                                 <span class="text-[10px] block font-bold text-[#8890AA] uppercase tracking-widest">Rate</span>
-                                <span class="text-2xl font-extrabold text-[#4C6CCB] price-display">₱100,000</span>
+                                <span class="text-2xl font-extrabold text-[#4C6CCB] price-display">$1,000.00</span>
                             </div>
                         </div>
                     </div>
@@ -659,7 +659,7 @@ require_once 'book-consultation.php';
 
                         <div class="bg-[#F4F6F8] p-4 rounded-2xl border border-[rgba(19,34,75,0.06)]">
                             <span class="text-[10px] uppercase font-bold text-[#8890AA] tracking-wider block mb-1">Consultation Fee</span>
-                            <div class="text-2xl font-extrabold text-[#4C6CCB]" id="reviewPrice">₱45,000</div>
+                            <div class="text-2xl font-extrabold text-[#4C6CCB]" id="reviewPrice">$450.00</div>
                             <div class="text-[10px] text-[#8890AA]">Includes pre-audit &amp; action plan</div>
                         </div>
                     </div>
@@ -706,7 +706,7 @@ require_once 'book-consultation.php';
                             <span class="text-[10px] uppercase font-bold text-[#8890AA] tracking-wider block">Advisory Rate</span>
                             <span class="text-[11px] text-[#4b4b4b]">Direct consultation</span>
                         </div>
-                        <span id="sb-price" class="text-2xl font-extrabold text-[#4C6CCB]">₱45,000</span>
+                        <span id="sb-price" class="text-2xl font-extrabold text-[#4C6CCB]">$450.00</span>
                     </div>
 
                     <div class="p-3 bg-[#F4F6F8] rounded-xl text-[11px] text-[#4b4b4b] leading-relaxed flex items-start gap-2">
@@ -773,9 +773,9 @@ require_once 'book-consultation.php';
             clientEmail: 'maria@pesolink.com',
             service: 'UI Design',
             duration: '60 min',
-            price: '₱45,000',
-            price30: 25000,
-            price60: 45000,
+            price: '$450.00',
+            price30: 250,
+            price60: 450,
             dateRaw: '2026-09-10',
             dateFormatted: 'Sep 10, 2026',
             time: '10:00 AM',
@@ -842,7 +842,7 @@ require_once 'book-consultation.php';
 
             bookingState.service = name;
             bookingState.duration = `${dur} min`;
-            bookingState.price = `₱${cost.toLocaleString()}`;
+            bookingState.price = `$${cost.toLocaleString()}`;
             bookingState.price30 = p30;
             bookingState.price60 = p60;
 
@@ -858,12 +858,12 @@ require_once 'book-consultation.php';
 
             const displayEl = card.querySelector('.price-display');
             if (displayEl) {
-                displayEl.innerText = `₱${cost.toLocaleString()}`;
+                displayEl.innerText = `$${cost.toLocaleString()}`;
             }
 
             if (card.classList.contains('selected')) {
                 bookingState.duration = `${dur} min`;
-                bookingState.price = `₱${cost.toLocaleString()}`;
+                bookingState.price = `$${cost.toLocaleString()}`;
                 syncLiveSidebar();
             }
         }
@@ -956,8 +956,8 @@ require_once 'book-consultation.php';
 
             // Resolve duration number from bookingState string ("60 min" → 60)
             const durNum = parseInt(bookingState.duration) || 60;
-            // Resolve raw price number (strip ₱ and commas)
-            const priceNum = parseInt((bookingState.price || '0').replace(/[^0-9]/g, '')) || 0;
+            // Resolve raw price number (strip $ and commas)
+            const priceNum = parseFloat((bookingState.price || '0').replace(/[^0-9.]/g, '')) || 0;
 
             const body = new FormData();
             body.append('guest_name',  bookingState.clientName  || '');

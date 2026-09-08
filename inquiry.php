@@ -1,5 +1,31 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/includes/functions.php';
+
+$prefill_name    = '';
+$prefill_email   = '';
+$prefill_company = '';
+$prefill_phone   = '';
+
+if (isset($_SESSION['user_id'])) {
+    $prefill_name  = $_SESSION['user_name'] ?? $_SESSION['name'] ?? '';
+    $prefill_email = $_SESSION['email'] ?? '';
+    try {
+        $uStmt = $pdo->prepare('SELECT name, email, company FROM users WHERE id = ? LIMIT 1');
+        $uStmt->execute([(int)$_SESSION['user_id']]);
+        $userRow = $uStmt->fetch();
+        if ($userRow) {
+            $prefill_name    = $userRow['name'] ?? $prefill_name;
+            $prefill_email   = $userRow['email'] ?? $prefill_email;
+            $prefill_company = $userRow['company'] ?? '';
+        }
+    } catch (\PDOException $e) {
+        error_log('inquiry.php prefill user error: ' . $e->getMessage());
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -211,18 +237,33 @@ session_start();
                         <span class="w-6 h-6 rounded-full bg-[#DDEBFF] text-[#4C6CCB] text-xs font-bold flex items-center justify-center">1</span>
                         Your Contact Information
                     </h2>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
                         <div>
                             <label for="fullName" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Full Name *</label>
-                            <input type="text" id="fullName" required placeholder="e.g. Maria Santos" class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium">
+                            <input type="text" id="fullName" required placeholder="e.g. Maria Santos"
+                                   value="<?= htmlspecialchars($prefill_name, ENT_QUOTES, 'UTF-8') ?>"
+                                   class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium">
+                            <p id="err-name" class="text-xs text-red-500 mt-1.5 font-medium hidden"></p>
                         </div>
                         <div>
                             <label for="email" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Email Address *</label>
-                            <input type="email" id="email" required placeholder="maria@company.com" class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium">
+                            <input type="email" id="email" required placeholder="maria@company.com"
+                                   value="<?= htmlspecialchars($prefill_email, ENT_QUOTES, 'UTF-8') ?>"
+                                   class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium">
+                            <p id="err-email" class="text-xs text-red-500 mt-1.5 font-medium hidden"></p>
                         </div>
-                        <div class="sm:col-span-2">
+                        <div>
+                            <label for="phone" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Phone Number *</label>
+                            <input type="tel" id="phone" required placeholder="e.g. 0917 123 4567"
+                                   class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium">
+                            <p id="err-phone" class="text-xs text-red-500 mt-1.5 font-medium hidden"></p>
+                        </div>
+                        <div class="sm:col-span-3">
                             <label for="company" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Company / Organization <span class="normal-case text-[#8890AA] font-normal">(Optional)</span></label>
-                            <input type="text" id="company" placeholder="e.g. Pesolink Financial Services" class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium">
+                            <input type="text" id="company" placeholder="e.g. Pesolink Financial Services"
+                                   value="<?= htmlspecialchars($prefill_company, ENT_QUOTES, 'UTF-8') ?>"
+                                   class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium">
+                            <p id="err-company" class="text-xs text-red-500 mt-1.5 font-medium hidden"></p>
                         </div>
                     </div>
                 </div>
@@ -247,9 +288,10 @@ session_start();
                                 <option value="Responsive Web Design">Responsive Web Design</option>
                                 <option value="Design Systems">Design Systems</option>
                             </select>
+                            <p id="err-projectType" class="text-xs text-red-500 mt-1.5 font-medium hidden"></p>
                         </div>
                         <div>
-                            <label for="budget" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Budget Range ($ (USD)) *</label>
+                            <label for="budget" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Budget Range (₱ PHP) *</label>
                             <select id="budget" required class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium cursor-pointer">
                                 <option value="" disabled selected>Select budget range</option>
                                 <option value="Under $50,000">Under $50,000</option>
@@ -257,6 +299,7 @@ session_start();
                                 <option value="$150,000 – $300,000">$150,000 – $300,000</option>
                                 <option value="$300,000+">$300,000+</option>
                             </select>
+                            <p id="err-budget" class="text-xs text-red-500 mt-1.5 font-medium hidden"></p>
                         </div>
                         <div>
                             <label for="timeline" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Ideal Timeline *</label>
@@ -267,6 +310,7 @@ session_start();
                                 <option value="2–3 Months">2–3 Months</option>
                                 <option value="Flexible">Flexible</option>
                             </select>
+                            <p id="err-timeline" class="text-xs text-red-500 mt-1.5 font-medium hidden"></p>
                         </div>
                     </div>
                 </div>
@@ -283,17 +327,19 @@ session_start();
                         <div>
                             <label for="description" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Project Description * (Min 20 characters)</label>
                             <textarea id="description" rows="4" required minlength="20" placeholder="Describe the problem you're looking to solve, your target users, and key features needed..." class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium leading-relaxed"></textarea>
+                            <p id="err-description" class="text-xs text-red-500 mt-1.5 font-medium hidden"></p>
                         </div>
 
                         <!-- File -->
                         <div>
-                            <label class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Reference Files / Brief <span class="normal-case text-[#8890AA] font-normal">(Optional, max 5MB)</span></label>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Reference Files / Brief <span class="normal-case text-[#8890AA] font-normal">(Optional, max 5MB — PDF, PNG, JPG, DOCX)</span></label>
                             <div id="dropzone" onclick="document.getElementById('fileInput').click()" class="dropzone rounded-2xl p-6 text-center cursor-pointer bg-[#F4F6F8]">
-                                <input type="file" id="fileInput" onchange="handleFileSelected(this)" class="hidden">
+                                <input type="file" id="fileInput" onchange="handleFileSelected(this)" class="hidden" accept=".pdf,.png,.jpg,.jpeg,.docx">
                                 <iconify-icon icon="lucide:upload-cloud" class="text-3xl text-[#6C5BB5] mb-2"></iconify-icon>
                                 <div class="text-sm font-semibold text-[#13224B]">Click to attach file or drag and drop</div>
-                                <div class="text-xs text-[#8890AA] mt-1">PDF, Figma files, ZIP, PNG, DOCX up to 5MB</div>
+                                <div class="text-xs text-[#8890AA] mt-1">PDF, PNG, JPG, DOCX up to 5MB</div>
                             </div>
+                            <p id="err-file" class="text-xs text-red-500 mt-1.5 font-medium hidden"></p>
                             <div id="fileChip" class="hidden mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#DDEBFF] text-[#13224B] text-xs font-medium">
                                 <iconify-icon icon="lucide:file-text" class="text-[#4C6CCB]"></iconify-icon>
                                 <span id="fileNameDisplay">file.pdf</span>
@@ -302,6 +348,8 @@ session_start();
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
                     </div>
                 </div>
 
@@ -389,8 +437,44 @@ session_start();
             document.getElementById('fileChip').classList.add('hidden');
         }
 
+        let submittedData = null;
+
+        function clearErrors() {
+            const errEls = document.querySelectorAll('[id^="err-"]');
+            errEls.forEach(el => {
+                el.innerText = '';
+                el.classList.add('hidden');
+            });
+            const inputs = document.querySelectorAll('.input-field');
+            inputs.forEach(inp => inp.classList.remove('border-red-500'));
+        }
+
+        function showFieldError(field, msg) {
+            const errEl = document.getElementById('err-' + field);
+            if (errEl) {
+                errEl.innerText = msg;
+                errEl.classList.remove('hidden');
+            }
+            const inputMap = {
+                name: 'fullName',
+                email: 'email',
+                phone: 'phone',
+                company: 'company',
+                projectType: 'projectType',
+                budget: 'budget',
+                timeline: 'timeline',
+                description: 'description',
+                file: 'fileInput'
+            };
+            const inp = document.getElementById(inputMap[field] || field);
+            if (inp) {
+                inp.classList.add('border-red-500');
+            }
+        }
+
         async function submitInquiry(e) {
             e.preventDefault();
+            clearErrors();
 
             const submitBtn = document.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
@@ -399,26 +483,38 @@ session_start();
             const body = new FormData();
             body.append('name',        document.getElementById('fullName').value.trim());
             body.append('email',       document.getElementById('email').value.trim());
+            body.append('phone',       document.getElementById('phone').value.trim());
             body.append('company',     document.getElementById('company').value.trim());
             body.append('projectType', document.getElementById('projectType').value);
             body.append('budget',      document.getElementById('budget').value);
             body.append('timeline',    document.getElementById('timeline').value);
             body.append('description', document.getElementById('description').value.trim());
-            body.append('fileName',    attachedFileName || '');
+
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput.files && fileInput.files[0]) {
+                body.append('file', fileInput.files[0]);
+            }
 
             try {
                 const res  = await fetch('inquiry-handler.php', { method: 'POST', body });
                 const data = await res.json();
 
                 if (!res.ok || !data.success) {
-                    alert(data.error || 'Submission failed. Please try again.');
+                    if (data.field_errors) {
+                        for (const [field, msg] of Object.entries(data.field_errors)) {
+                            showFieldError(field, msg);
+                        }
+                    } else {
+                        alert(data.error || 'Submission failed. Please check the form.');
+                    }
                     submitBtn.disabled = false;
                     submitBtn.querySelector('span').innerText = 'Submit Project Inquiry';
                     return;
                 }
 
-                // Keep raw numeric ID for the booking URL handoff
+                // Keep raw numeric ID and submitted data for the booking handoff
                 createdInquiryId = data.raw_id;
+                submittedData    = data;
 
                 // Populate & show confirmation modal
                 document.getElementById('leadNameConfirm').innerText  = data.name;
@@ -435,7 +531,15 @@ session_start();
         }
 
         function goToBooking() {
-            if (createdInquiryId) {
+            if (createdInquiryId && submittedData) {
+                const p = new URLSearchParams({
+                    inquiry_id: createdInquiryId,
+                    name: submittedData.name || '',
+                    email: submittedData.email || '',
+                    service: submittedData.service || ''
+                });
+                window.location.href = `book-consultation.php?${p.toString()}`;
+            } else if (createdInquiryId) {
                 window.location.href = `book-consultation.php?inquiry_id=${createdInquiryId}`;
             } else {
                 window.location.href = 'book-consultation.php';
