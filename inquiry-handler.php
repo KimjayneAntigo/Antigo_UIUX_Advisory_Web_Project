@@ -1,7 +1,6 @@
 <?php
 /**
- * inquiry-handler.php
- * Antigo UI/UX Advisory — Inquiry form submission handler.
+ * Inquiry form submission handler.
  * Accepts POST (AJAX or direct form); validates in exact prompt order and returns JSON.
  */
 
@@ -51,12 +50,12 @@ if (!empty($errors)) {
     echo json_encode([
         'success'      => false,
         'field_errors' => $field_errors,
-        'error'        => reset($field_errors), // First error message for alert fallback
+        'error'        => reset($field_errors), // error message for alert fallback
     ]);
     exit;
 }
 
-// ── Save validated file to storage ───────────────────────────────────────────
+// Save validated file to storage 
 if (!empty($_FILES['file']['name']) && empty($field_errors)) {
     $file      = $_FILES['file'];
     $origName  = basename($file['name']);
@@ -79,7 +78,7 @@ if (!empty($_FILES['file']['name']) && empty($field_errors)) {
     }
 }
 
-// ── Step 5: Sanitize every text field before insert ───────────────────────────
+//Sanitize every text field before insert
 $name        = sanitize_input($raw_name);
 $email       = sanitize_input($raw_email);
 $phone       = sanitize_input($raw_phone);
@@ -93,7 +92,7 @@ $description = sanitize_input($raw_description);
 // Check if user is logged in
 $user_id = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
 
-// ── Database insert ───────────────────────────────────────────────────────────
+// Database insert
 try {
     $pdo->beginTransaction();
 
@@ -120,16 +119,14 @@ try {
 
 $new_inquiry_id = (int) $pdo->lastInsertId();
 
-// ── STORE TRUSTED-SESSION TOKEN ──────────────────────────────────────────────
-// SECURITY: Store ONLY this record's ID in session — NOT the email.
-// register.php will link by this ID, not by email match, preventing
-// account-takeover via email enumeration.
+// STORE TRUSTED-SESSION
+//Store ONLY this record's ID in session — NOT the email.
 if (!$user_id) {
     // Only store for guest submissions; logged-in clients are already linked
     $_SESSION['pending_link_inquiry_id'] = $new_inquiry_id;
 }
 
-// ── SUCCESS RESPONSE ─────────────────────────────────────────────────────────
+// SUCCESS RESPONSE
 echo json_encode([
     'success'    => true,
     'inquiry_id' => $refCode,
