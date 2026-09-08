@@ -24,7 +24,7 @@ $fileName    = trim($_POST['fileName']    ?? '');   // client-provided filename 
 
 // Allowed values for enum-style fields
 $allowed_services = ['UI Design','UX Research','Wireframing','Interactive Prototyping','Responsive Web Design','Design Systems'];
-$allowed_budgets  = ['Under ₱50,000','₱50,000 – ₱150,000','₱150,000 – ₱300,000','₱300,000+'];
+$allowed_budgets  = ['Under $50,000','$50,000 – $150,000','$150,000 – $300,000','$300,000+'];
 $allowed_timelines= ['Urgent (< 2 weeks)','1 Month','2–3 Months','Flexible'];
 
 // VALIDATION
@@ -67,16 +67,15 @@ $stmt->execute([
 
 $new_inquiry_id = (int) $pdo->lastInsertId();
 
-// ── STORE TRUSTED-SESSION TOKEN ──────────────────────────────────────────────
-// SECURITY: Store ONLY this record's ID in session — NOT the email.
-// register.php will link by this ID, not by email match, preventing
-// account-takeover via email enumeration.
+// STORE TRUSTED-SESSION 
+// Store ONLY this record's ID in session NOT the email.
+// register.php will link by this ID, not by email match, preventing account-takeover via email enumeration.
 if (!$user_id) {
-    // Only store for guest submissions; logged-in clients are already linked
+    // Only store for guest submissions, logged-in clients are already linked
     $_SESSION['pending_link_inquiry_id'] = $new_inquiry_id;
 }
 
-// ── SUCCESS RESPONSE ─────────────────────────────────────────────────────────
+//SUCCESS RESPONSE
 echo json_encode([
     'success'    => true,
     'inquiry_id' => 'INQ-' . str_pad($new_inquiry_id, 4, '0', STR_PAD_LEFT),
