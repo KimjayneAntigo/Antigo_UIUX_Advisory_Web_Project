@@ -1,6 +1,6 @@
 <?php
-// Antigo UI/UX Advisory — Book a Consultation Page
-session_start();
+
+require_once 'book-consultation.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -741,6 +741,14 @@ session_start();
                     Back to Home
                 </a>
             </div>
+
+            <!-- Trusted-session registration CTA -->
+            <div class="mt-4 pt-4 border-t border-[rgba(19,34,75,0.08)]">
+                <a href="register.php" class="flex items-center justify-center gap-2 text-xs font-semibold text-[#6C5BB5] hover:underline">
+                    <iconify-icon icon="lucide:user-plus"></iconify-icon>
+                    Create an account to track this booking in your dashboard →
+                </a>
+            </div>
         </div>
     </div>
 
@@ -942,27 +950,47 @@ session_start();
             window.scrollTo({ top: 120, behavior: 'smooth' });
         }
 
-        function confirmBooking() {
-            // Write to shared localStorage layer
-            const newBooking = AntigoData.addBooking({
-                inquiryId: bookingState.inquiryId,
-                clientName: bookingState.clientName,
-                clientEmail: bookingState.clientEmail,
-                service: bookingState.service,
-                duration: bookingState.duration,
-                price: bookingState.price,
-                date: bookingState.dateRaw,
-                time: bookingState.time,
-                format: bookingState.format
-            });
+        async function confirmBooking() {
+            const btn = document.querySelector('[onclick="confirmBooking()"]');
+            if (btn) { btn.disabled = true; btn.querySelector('span').innerText = 'Confirming…'; }
 
-            // Show confirmation modal
-            document.getElementById('modalBookingId').innerText = newBooking.id;
-            document.getElementById('modalServiceName').innerText = newBooking.service;
-            document.getElementById('modalDateTime').innerText = `${bookingState.dateFormatted} · ${bookingState.time}`;
-            document.getElementById('bookingConfirmModal').classList.remove('hidden');
+            // Resolve duration number from bookingState string ("60 min" → 60)
+            const durNum = parseInt(bookingState.duration) || 60;
+            // Resolve raw price number (strip ₱ and commas)
+            const priceNum = parseInt((bookingState.price || '0').replace(/[^0-9]/g, '')) || 0;
+
+            const body = new FormData();
+            body.append('guest_name',  bookingState.clientName  || '');
+            body.append('guest_email', bookingState.clientEmail || '');
+            body.append('service',     bookingState.service);
+            body.append('duration',    durNum);
+            body.append('price',       priceNum);
+            body.append('date',        bookingState.dateRaw);
+            body.append('time',        bookingState.time);
+            body.append('format',      bookingState.format);
+            if (bookingState.inquiryId) body.append('inquiry_id', bookingState.inquiryId);
+
+            try {
+                const res  = await fetch('booking-handler.php', { method: 'POST', body });
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    alert(data.error || 'Booking failed. Please try again.');
+                    if (btn) { btn.disabled = false; btn.querySelector('span').innerText = 'Confirm Consultation'; }
+                    return;
+                }
+
+                // Show confirmation modal
+                document.getElementById('modalBookingId').innerText   = data.booking_id;
+                document.getElementById('modalServiceName').innerText = data.service;
+                document.getElementById('modalDateTime').innerText    = `${data.date} · ${data.time}`;
+                document.getElementById('bookingConfirmModal').classList.remove('hidden');
+
+            } catch (err) {
+                alert('A network error occurred. Please try again.');
+                if (btn) { btn.disabled = false; btn.querySelector('span').innerText = 'Confirm Consultation'; }
+            }
         }
     </script>
 </body>
 </html>
-
