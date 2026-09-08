@@ -249,13 +249,13 @@ session_start();
                             </select>
                         </div>
                         <div>
-                            <label for="budget" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Budget Range (₱ PHP) *</label>
+                            <label for="budget" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Budget Range ($ (USD)) *</label>
                             <select id="budget" required class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium cursor-pointer">
                                 <option value="" disabled selected>Select budget range</option>
-                                <option value="Under ₱50,000">Under ₱50,000</option>
-                                <option value="₱50,000 – ₱150,000">₱50,000 – ₱150,000</option>
-                                <option value="₱150,000 – ₱300,000">₱150,000 – ₱300,000</option>
-                                <option value="₱300,000+">₱300,000+</option>
+                                <option value="Under $50,000">Under $50,000</option>
+                                <option value="$50,000 – $150,000">$50,000 – $150,000</option>
+                                <option value="$150,000 – $300,000">$150,000 – $300,000</option>
+                                <option value="$300,000+">$300,000+</option>
                             </select>
                         </div>
                         <div>
@@ -334,7 +334,7 @@ session_start();
             <div class="bg-[#F4F6F8] rounded-2xl p-4 mb-8 text-left text-xs text-[#4b4b4b] space-y-1.5 border border-[rgba(19,34,75,0.06)]">
                 <div class="flex justify-between"><span class="text-[#8890AA]">Reference ID:</span> <strong id="inquiryIdDisplay" class="text-[#13224B]">INQ-1004</strong></div>
                 <div class="flex justify-between"><span class="text-[#8890AA]">Selected Service:</span> <strong id="serviceDisplay" class="text-[#13224B]">UI Design</strong></div>
-                <div class="flex justify-between"><span class="text-[#8890AA]">Budget Band:</span> <strong id="budgetDisplay" class="text-[#13224B]">₱50,000 – ₱150,000</strong></div>
+                <div class="flex justify-between"><span class="text-[#8890AA]">Budget Band:</span> <strong id="budgetDisplay" class="text-[#13224B]">$50,000 – $150,000</strong></div>
             </div>
 
             <div class="flex flex-col sm:flex-row gap-3">
