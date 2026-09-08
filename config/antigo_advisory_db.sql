@@ -1,10 +1,4 @@
--- ============================================================
 -- Antigo UI/UX Advisory — Database Schema
--- Database: antigo_advisory_db
--- Charset:  utf8mb4 | Collation: utf8mb4_unicode_ci
--- Run this file in phpMyAdmin > SQL tab, or via MySQL CLI:
---   mysql -u root -p < antigo_advisory_db.sql
--- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `antigo_advisory_db`
     CHARACTER SET utf8mb4
@@ -12,11 +6,7 @@ CREATE DATABASE IF NOT EXISTS `antigo_advisory_db`
 
 USE `antigo_advisory_db`;
 
--- ------------------------------------------------------------
--- 1. USERS
---    Stores both client and admin accounts.
---    role: 'client' | 'admin'
--- ------------------------------------------------------------
+-- USERS
 CREATE TABLE IF NOT EXISTS `users` (
     `id`            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `name`          VARCHAR(120)  NOT NULL,
@@ -34,11 +24,7 @@ INSERT INTO `users` (`name`, `email`, `password_hash`, `role`, `company`) VALUES
 ('Demo Client',          'demo@client.com',  '$2y$10$PMsLaooowB7pbbWGERvPteeWC.qEh.494hfPklY8eyjoIhlXkjlFy', 'client', 'Visayas Health Care'),
 ('Kimberly Jayne Antigo','admin@antigo.com', '$2y$10$PMsLaooowB7pbbWGERvPteeWC.qEh.494hfPklY8eyjoIhlXkjlFy', 'admin',  'Antigo UI/UX Advisory');
 
--- ------------------------------------------------------------
--- 2. INQUIRIES
---    Project leads submitted via inquiry.php (Page 03).
---    status: 'new' | 'reviewed' | 'contacted' | 'converted'
--- ------------------------------------------------------------
+-- INQUIRIES
 CREATE TABLE IF NOT EXISTS `inquiries` (
     `id`           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `ref_code`     VARCHAR(20)   NOT NULL UNIQUE COMMENT 'e.g. INQ-1001',
@@ -62,11 +48,7 @@ INSERT INTO `inquiries` (`ref_code`, `name`, `email`, `company`, `project_type`,
 ('INQ-1002', 'Juan dela Cruz', 'juan@visayas.ph',     'Visayas Health Care',          'UX Research',  '₱50,000 – ₱150,000',  '2–3 Months','Patient portal UX audit and user journey mapping for clinic management system.', 'contacted'),
 ('INQ-1003', 'Ana Reyes',      'ana@cebu-tourism.ph', 'Cebu Tourism Board',           'Design Systems','₱300,000+',           'Flexible',  'Build a scalable design system for our tourism mobile and web properties.', 'reviewed');
 
--- ------------------------------------------------------------
--- 3. BOOKINGS
---    Consultation slots booked via book-consultation.php (Page 02).
---    status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
--- ------------------------------------------------------------
+-- BOOKINGS
 CREATE TABLE IF NOT EXISTS `bookings` (
     `id`           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `booking_code` VARCHAR(20)   NOT NULL UNIQUE COMMENT 'e.g. BKG-2001',
@@ -91,11 +73,7 @@ INSERT INTO `bookings` (`booking_code`, `inquiry_id`, `client_name`, `client_ema
 ('BKG-2001', 1, 'Maria Santos',   'maria@pesolink.com', 'UI Design',   '60 min', '₱45,000', '2026-09-10', '10:00 AM', 'Video Call (Google Meet)', 'confirmed'),
 ('BKG-2002', 2, 'Juan dela Cruz', 'juan@visayas.ph',    'UX Research', '60 min', '₱50,000', '2026-09-15', '02:00 PM', 'Video Call (Google Meet)', 'pending');
 
--- ------------------------------------------------------------
--- 4. PROJECTS
---    Active client projects managed from admin panel.
---    status_type: 'pending' | 'in_design' | 'completed'
--- ------------------------------------------------------------
+-- PROJECTS
 CREATE TABLE IF NOT EXISTS `projects` (
     `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `project_code`   VARCHAR(20)   NOT NULL UNIQUE COMMENT 'e.g. PRJ-3001',
@@ -124,10 +102,7 @@ INSERT INTO `projects` (`project_code`, `title`, `category`, `client_name`, `cli
 ('PRJ-3002', 'Visayas Health Care Patient Portal',  'Healthcare · Web App',    'Juan dela Cruz', 'juan@visayas.ph',    'Visayas Health Care',          '₱180,000', '2026-10-15', 2, 'Wireframing',          40, 'Wireframing','in_design'),
 ('PRJ-3003', 'Cebu Tourism Responsive Website',     'Tourism · Responsive Web','Ana Reyes',      'ana@cebu-tourism.ph','Cebu Tourism Board',            '₱120,000', '2026-11-30', 1, 'Discovery & Research', 20, 'Discovery',  'pending');
 
--- ------------------------------------------------------------
--- 5. PROJECT FILES
---    Deliverables and reference files per project.
--- ------------------------------------------------------------
+-- PROJECT FILES
 CREATE TABLE IF NOT EXISTS `project_files` (
     `id`          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `project_id`  INT UNSIGNED  NOT NULL,
@@ -147,11 +122,8 @@ INSERT INTO `project_files` (`project_id`, `name`, `size`) VALUES
 (2, 'HealthPortal_Wireframes_v2.fig',  '3.1 MB'),
 (2, 'Patient_Journey_Map.pdf',         '1.2 MB');
 
--- ------------------------------------------------------------
--- 6. PROJECT MESSAGES
---    Live collaboration thread between client and designer.
---    role: 'client' | 'designer'
--- ------------------------------------------------------------
+-- PROJECT MESSAGES
+
 CREATE TABLE IF NOT EXISTS `project_messages` (
     `id`         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `project_id` INT UNSIGNED  NOT NULL,
@@ -168,7 +140,3 @@ INSERT INTO `project_messages` (`project_id`, `sender`, `role`, `message`) VALUE
 (1, 'Kimberly Jayne Antigo', 'designer', 'Hi Maria! I have completed the initial wireframes for the dashboard. Please review the Figma file and share your feedback.'),
 (1, 'Maria Santos',          'client',   'Looks great! Can we adjust the color scheme on the bottom navigation to match our brand blue?'),
 (1, 'Kimberly Jayne Antigo', 'designer', 'Absolutely! Updated the nav colors in v1.2 of the design file. You can review the latest version in the files section.');
-
--- ============================================================
--- End of schema
--- ============================================================
