@@ -1,7 +1,6 @@
 /**
  * Handle for Inquiries, Bookings, Projects, Messages, and Sessions.
  */
-
 const AntigoData = {
     // Keys
     KEYS: {
@@ -22,7 +21,7 @@ const AntigoData = {
                     email: 'maria@pesolink.com',
                     company: 'Pesolink Financial',
                     projectType: 'UI Design',
-                    budget: '₱150,000 – ₱300,000',
+                    budget: '$150,000 – $300,000',
                     timeline: '1 Month',
                     description: 'Redesigning our mobile banking dashboard for smoother digital transactions and wallet management.',
                     status: 'reviewed', // 'new', 'reviewed', 'contacted', 'converted'
@@ -35,7 +34,7 @@ const AntigoData = {
                     email: 'jared@kaperosters.ph',
                     company: 'Kape Roasters Co.',
                     projectType: 'Design Systems',
-                    budget: '₱50,000 – ₱150,000',
+                    budget: '$50,000 – $150,000',
                     timeline: '2–3 Months',
                     description: 'Building a unified digital storefront design system across our retail and subscription web platforms.',
                     status: 'converted',
@@ -48,7 +47,7 @@ const AntigoData = {
                     email: 'anna.reyes@visayasclinic.ph',
                     company: 'Visayas Health Care',
                     projectType: 'UX Research',
-                    budget: '₱50,000 – ₱150,000',
+                    budget: '$50,000 – $150,000',
                     timeline: '1 Month',
                     description: 'Conducting patient user journey mapping and usability audits for our online clinic appointment system.',
                     status: 'new',
@@ -68,7 +67,7 @@ const AntigoData = {
                     clientEmail: 'maria@pesolink.com',
                     service: 'UI Design',
                     duration: '60 min',
-                    price: '₱45,000',
+                    price: '$450',
                     date: '2026-09-10',
                     time: '10:00 AM',
                     format: 'Video Call (Google Meet)',
@@ -82,7 +81,7 @@ const AntigoData = {
                     clientEmail: 'anna.reyes@visayasclinic.ph',
                     service: 'UX Research',
                     duration: '30 min',
-                    price: '₱30,000',
+                    price: '$300',
                     date: '2026-09-12',
                     time: '02:30 PM',
                     format: 'Video Call (Zoom)',
@@ -103,7 +102,7 @@ const AntigoData = {
                     clientName: 'Maria Santos',
                     clientEmail: 'maria@pesolink.com',
                     company: 'Pesolink Financial',
-                    budget: '₱250,000',
+                    budget: '$250,000',
                     currentPhase: 3, // 1: Discovery, 2: Wireframing, 3: UI Design, 4: Prototyping, 5: Handover
                     phaseName: 'UI Design',
                     progress: 60,
@@ -126,7 +125,7 @@ const AntigoData = {
                     clientName: 'Jared Dela Cruz',
                     clientEmail: 'jared@kaperosters.ph',
                     company: 'Kape Roasters Co.',
-                    budget: '₱120,000',
+                    budget: '$120,000',
                     currentPhase: 5,
                     phaseName: 'Handover & Documentation',
                     progress: 100,
@@ -148,7 +147,7 @@ const AntigoData = {
                     clientName: 'Demo Client',
                     clientEmail: 'demo@client.com',
                     company: 'Visayas Health Care',
-                    budget: '₱180,000',
+                    budget: '$180,000',
                     currentPhase: 2,
                     phaseName: 'Wireframing & User Flows',
                     progress: 40,
@@ -349,5 +348,4 @@ const AntigoData = {
     }
 };
 
-// Initialize
 AntigoData.init();
