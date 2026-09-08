@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // TRUSTED-SESSION LINKING
         // Link ONLY the session-stored IDs — NOT any historical records
-        // belonging to this email address. See SECURITY NOTE 1 above.
+        // belonging to this email address
         if ($pending_inquiry_id) {
             $stmt = $pdo->prepare('UPDATE inquiries SET user_id = ? WHERE id = ? AND user_id IS NULL');
             $stmt->execute([$new_user_id, $pending_inquiry_id]);
@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$new_user_id, $pending_booking_id]);
         }
 
-        // Clear pending-link values immediately after linking (single-use tokens)
+        // Clear pending-link values immediately after linking
         unset($_SESSION['pending_link_inquiry_id'], $_SESSION['pending_link_booking_id']);
 
       // Issue a brand-new session ID and delete the old one to prevent session hijacking.
@@ -89,12 +89,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $_SESSION['user_id']   = $new_user_id;
         $_SESSION['user_name'] = $name;
+        $_SESSION['name']      = $name;
         $_SESSION['email']     = $email;
         $_SESSION['role']      = 'client';
 
        // Future task: Add CAPTCHA or request limits to block bot attacks and automated spam signups.
 
-        header('Location: client-dashboard.php?welcome=1');
+        header('Location: client/dashboard.php?welcome=1');
         exit;
     }
 }
