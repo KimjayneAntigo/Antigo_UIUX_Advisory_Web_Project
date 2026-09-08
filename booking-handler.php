@@ -1,8 +1,7 @@
 <?php
 /**
- * booking-handler.php
- * Antigo UI/UX Advisory — Consultation booking submission endpoint.
- * Accepts POST only; always returns JSON.
+ * Consultation booking submission endpoint.
+ * Accepts POST only always returns JSON.
  */
 
 session_start();
@@ -10,14 +9,14 @@ require_once __DIR__ . '/config/db.php';
 
 header('Content-Type: application/json');
 
-// ── Method guard ──────────────────────────────────────────────────────────────
+//  Method guard
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     echo json_encode(['error' => 'Method not allowed.']);
     exit;
 }
 
-// ── Whitelists ────────────────────────────────────────────────────────────────
+//  Whitelists 
 $allowed_services  = [
     'UI Design',
     'UX Research',
@@ -41,7 +40,7 @@ $allowed_times     = [
     '04:30 PM',
 ];
 
-// ── Server-side price map (USD) ──────────────────────────────────────────────
+//  Server-side price map (USD) 
 // Key: service name → [duration_int => raw_int_amount]
 // The stored string is formatted as '$XX0' matching USD.
 $price_map = [
@@ -53,7 +52,7 @@ $price_map = [
     'Design Systems'          => [30 => 600, 60 => 1000],
 ];
 
-// ── Input collection & sanitisation ──────────────────────────────────────────
+//  Input collection & sanitisation 
 $guest_name  = trim($_POST['guest_name']  ?? '');
 $guest_email = trim($_POST['guest_email'] ?? '');
 $service     = trim($_POST['service']     ?? '');
@@ -63,7 +62,7 @@ $time_raw    = trim($_POST['time']        ?? '');
 $format      = trim($_POST['format']      ?? '');
 $inquiry_id  = isset($_POST['inquiry_id']) ? (int) $_POST['inquiry_id'] : null;
 
-// ── Validation ────────────────────────────────────────────────────────────────
+//  Validation 
 $errors  = [];
 $user_id = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
 
@@ -102,7 +101,7 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_raw)) {
     }
 }
 
-// Resolve server-side price — never trust the client-supplied price
+// Resolve server-side price never trust the client-supplied price
 $rawPrice     = null;
 $priceFormatted = null;
 if (in_array($service, $allowed_services, true) && in_array($duration, $allowed_durations, true)) {
@@ -121,8 +120,8 @@ if (!empty($errors)) {
     exit;
 }
 
-// ── Resolve client identity ───────────────────────────────────────────────────
-// Logged-in session takes precedence; fall back to inquiry lookup, then POST.
+//  Resolve client identity 
+// Logged-in session takes precedence fall back to inquiry lookup, then POST.
 if ($user_id) {
     $guest_name  = $_SESSION['user_name']  ?? $guest_name;
     $guest_email = $_SESSION['email']      ?? $guest_email;
@@ -138,10 +137,10 @@ if (empty($guest_name) && $inquiry_id) {
     }
 }
 
-// ── Format stored duration string matching schema: '30 min' / '60 min' ────────
+// Format stored duration string matching schema: '30 min' / '60 min'
 $durationStr = $duration . ' min';
 
-// ── Database insert — two-step transaction for booking_code (UNIQUE NOT NULL) ─
+// Database insert — two-step transaction for booking_code (UNIQUE NOT NULL) ─
 // Step 1: INSERT with 'PENDING' placeholder; Step 2: UPDATE to BKG-XXXX.
 try {
     $pdo->beginTransaction();
@@ -190,12 +189,12 @@ try {
     exit;
 }
 
-// ── Trusted-session linking (guest submissions only) ──────────────────────────
+//  Trusted-session linking (guest submissions only) 
 if (!$user_id) {
     $_SESSION['pending_link_booking_id'] = $newId;
 }
 
-// ── Success response ──────────────────────────────────────────────────────────
+//  Success response 
 echo json_encode([
     'success'    => true,
     'booking_id' => $bookingCode,

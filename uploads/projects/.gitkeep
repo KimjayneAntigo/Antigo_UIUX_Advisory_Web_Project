@@ -1,0 +1,3 @@
+# uploads/projects/ — server storage for project deliverable files
+# One subdirectory per project ID is created at upload time.
+# This .gitkeep ensures the directory is tracked by git while remaining otherwise empty.

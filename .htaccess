@@ -1,0 +1,23 @@
+# Antigo Web App —Apache configuration
+# Custom error pages
+ErrorDocument 404 /Antigo_WebApp/404.php
+
+
+# Prevent directory listing
+Options -Indexes
+
+# Deny access to config directory directly
+<Files "config/*">
+    Order deny,allow
+    Deny from all
+</Files>
+
+# PHP settings — turn off error display (log only)
+php_flag display_errors off
+php_value error_log /xampp/apache/logs/php_error.log
+
+# Block access to SQL/env files
+<FilesMatch "\.(sql|env|md)$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
