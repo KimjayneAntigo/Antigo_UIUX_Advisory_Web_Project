@@ -311,7 +311,7 @@ require_once 'book-consultation.php';
                 <div class="mb-8">
                     <span class="text-[12px] font-bold uppercase tracking-[0.2em] text-[#6C5BB5] block mb-1">Step 1 of 3</span>
                     <h1 class="text-3xl sm:text-4xl font-extrabold text-[#13224B] mb-2 tracking-tight">Select Advisory Service</h1>
-                    <p class="text-[#4b4b4b] text-base sm:text-lg">Choose the advisory focus for your strategic session. Pricing in ₱ (PHP).</p>
+                    <p class="text-[#4b4b4b] text-base sm:text-lg">Choose the advisory focus for your strategic session. Pricing in $ (USD).</p>
                 </div>
 
                 <!-- Cold visitor lead check fallback (Only shown if no lead exists) -->
@@ -353,13 +353,13 @@ require_once 'book-consultation.php';
                             </div>
                             <div class="text-right">
                                 <span class="text-[10px] block font-bold text-[#8890AA] uppercase tracking-widest">Rate</span>
-                                <span class="text-2xl font-extrabold text-[#4C6CCB] price-display">₱45,000</span>
+                                <span class="text-2xl font-extrabold text-[#4C6CCB] price-display">$450.00</span>
                             </div>
                         </div>
                     </div>
 
                     <!-- Card 2: UX Research -->
-                    <div onclick="selectServiceCard(this, 'UX Research', 30000, 50000)" class="service-card rounded-2xl p-6 cursor-pointer relative group overflow-hidden" data-name="UX Research" data-price30="30000" data-price60="50000">
+                    <div onclick="selectServiceCard(this, 'UX Research', 300.00, 500.00)" class="service-card rounded-2xl p-6 cursor-pointer relative group overflow-hidden" data-name="UX Research" data-price30="300.00" data-price60="500.00">
                         <div class="flex justify-between items-start mb-4">
                             <div class="w-12 h-12 bg-[#DDEBFF] rounded-xl flex items-center justify-center">
                                 <iconify-icon icon="lucide:search" class="text-2xl text-[#4C6CCB]"></iconify-icon>
@@ -379,13 +379,13 @@ require_once 'book-consultation.php';
                             </div>
                             <div class="text-right">
                                 <span class="text-[10px] block font-bold text-[#8890AA] uppercase tracking-widest">Rate</span>
-                                <span class="text-2xl font-extrabold text-[#4C6CCB] price-display">₱50,000</span>
+                                <span class="text-2xl font-extrabold text-[#4C6CCB] price-display">$500.00</span>
                             </div>
                         </div>
                     </div>
 
                     <!-- Card 3: Wireframing -->
-                    <div onclick="selectServiceCard(this, 'Wireframing', 20000, 35000)" class="service-card rounded-2xl p-6 cursor-pointer relative group overflow-hidden" data-name="Wireframing" data-price30="20000" data-price60="35000">
+                    <div onclick="selectServiceCard(this, 'Wireframing', 200.00, 350.00)" class="service-card rounded-2xl p-6 cursor-pointer relative group overflow-hidden" data-name="Wireframing" data-price30="200.00" data-price60="350.00">
                         <div class="flex justify-between items-start mb-4">
                             <div class="w-12 h-12 bg-[#DDEBFF] rounded-xl flex items-center justify-center">
                                 <iconify-icon icon="lucide:layers" class="text-2xl text-[#4C6CCB]"></iconify-icon>
@@ -405,13 +405,13 @@ require_once 'book-consultation.php';
                             </div>
                             <div class="text-right">
                                 <span class="text-[10px] block font-bold text-[#8890AA] uppercase tracking-widest">Rate</span>
-                                <span class="text-2xl font-extrabold text-[#4C6CCB] price-display">₱35,000</span>
+                                <span class="text-2xl font-extrabold text-[#4C6CCB] price-display">$350.00</span>
                             </div>
                         </div>
                     </div>
 
                     <!-- Card 4: Prototyping -->
-                    <div onclick="selectServiceCard(this, 'Interactive Prototyping', 40000, 70000)" class="service-card rounded-2xl p-6 cursor-pointer relative group overflow-hidden" data-name="Interactive Prototyping" data-price30="40000" data-price60="70000">
+                    <div onclick="selectServiceCard(this, 'Interactive Prototyping', 400.00, 700.00)" class="service-card rounded-2xl p-6 cursor-pointer relative group overflow-hidden" data-name="Interactive Prototyping" data-price30="400.00" data-price60="700.00">
                         <div class="flex justify-between items-start mb-4">
                             <div class="w-12 h-12 bg-[#DDEBFF] rounded-xl flex items-center justify-center">
                                 <iconify-icon icon="lucide:play-circle" class="text-2xl text-[#4C6CCB]"></iconify-icon>
@@ -431,13 +431,13 @@ require_once 'book-consultation.php';
                             </div>
                             <div class="text-right">
                                 <span class="text-[10px] block font-bold text-[#8890AA] uppercase tracking-widest">Rate</span>
-                                <span class="text-2xl font-extrabold text-[#4C6CCB] price-display">₱70,000</span>
+                                <span class="text-2xl font-extrabold text-[#4C6CCB] price-display">$700.00</span>
                             </div>
                         </div>
                     </div>
 
                     <!-- Card 5: Responsive Web -->
-                    <div onclick="selectServiceCard(this, 'Responsive Web Design', 50000, 90000)" class="service-card rounded-2xl p-6 cursor-pointer relative group overflow-hidden" data-name="Responsive Web Design" data-price30="50000" data-price60="90000">
+                    <div onclick="selectServiceCard(this, 'Responsive Web Design', 500.00, 900.00)" class="service-card rounded-2xl p-6 cursor-pointer relative group overflow-hidden" data-name="Responsive Web Design" data-price30="500.00" data-price60="900.00">
                         <div class="flex justify-between items-start mb-4">
                             <div class="w-12 h-12 bg-[#DDEBFF] rounded-xl flex items-center justify-center">
                                 <iconify-icon icon="lucide:smartphone" class="text-2xl text-[#4C6CCB]"></iconify-icon>
@@ -457,13 +457,13 @@ require_once 'book-consultation.php';
                             </div>
                             <div class="text-right">
                                 <span class="text-[10px] block font-bold text-[#8890AA] uppercase tracking-widest">Rate</span>
-                                <span class="text-2xl font-extrabold text-[#4C6CCB] price-display">₱90,000</span>
+                                <span class="text-2xl font-extrabold text-[#4C6CCB] price-display">$900.00</span>
                             </div>
                         </div>
                     </div>
 
                     <!-- Card 6: Design Systems -->
-                    <div onclick="selectServiceCard(this, 'Design Systems', 60000, 100000)" class="service-card rounded-2xl p-6 cursor-pointer relative group overflow-hidden" data-name="Design Systems" data-price30="60000" data-price60="100000">
+                    <div onclick="selectServiceCard(this, 'Design Systems', 600.00, 1000.00)" class="service-card rounded-2xl p-6 cursor-pointer relative group overflow-hidden" data-name="Design Systems" data-price30="600.00" data-price60="1000.00">
                         <div class="flex justify-between items-start mb-4">
                             <div class="w-12 h-12 bg-[#DDEBFF] rounded-xl flex items-center justify-center">
                                 <iconify-icon icon="lucide:component" class="text-2xl text-[#4C6CCB]"></iconify-icon>
@@ -524,10 +524,10 @@ require_once 'book-consultation.php';
                             </div>
                         </label>
                         <label class="flex items-center gap-3 p-3.5 rounded-xl border border-[rgba(19,34,75,0.1)] cursor-pointer hover:border-[#6C5BB5] transition-all bg-[#F4F6F8] has-[:checked]:bg-white has-[:checked]:border-[#6C5BB5] has-[:checked]:ring-2 has-[:checked]:ring-[#6C5BB5]/20">
-                            <input type="radio" name="meetingFormat" value="In-Person Studio (Dumaguete)" onchange="updateFormat(this.value)" class="text-[#6C5BB5] focus:ring-[#6C5BB5]">
+                            <input type="radio" name="meetingFormat" value="In-Person Studio (Cebu City)" onchange="updateFormat(this.value)" class="text-[#6C5BB5] focus:ring-[#6C5BB5]">
                             <div>
                                 <div class="text-xs font-bold text-[#13224B]">Studio Meeting</div>
-                                <div class="text-[10px] text-[#8890AA]">Dumaguete City</div>
+                                <div class="text-[10px] text-[#8890AA]">Cebu City</div>
                             </div>
                         </label>
                     </div>
