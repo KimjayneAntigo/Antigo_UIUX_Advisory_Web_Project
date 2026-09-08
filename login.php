@@ -6,7 +6,7 @@ if (isset($_SESSION['user_id'])) {
     if ($_SESSION['role'] === 'admin') {
         header('Location: admin-dashboard.php');
     } else {
-        header('Location: client-dashboard.php');
+        header('Location: client/dashboard.php');
     }
     exit;
 }
@@ -38,13 +38,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $_SESSION['user_id']   = $user['id'];
             $_SESSION['user_name'] = $user['name'];
+            $_SESSION['name']      = $user['name'];
             $_SESSION['email']     = $user['email'];
             $_SESSION['role']      = $user['role'];
 
             if ($user['role'] === 'admin') {
                 header('Location: admin-dashboard.php');
             } else {
-                header('Location: client-dashboard.php');
+                header('Location: client/dashboard.php');
             }
             exit;
         }
