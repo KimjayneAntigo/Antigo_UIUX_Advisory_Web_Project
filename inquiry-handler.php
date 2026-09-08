@@ -1,19 +1,4 @@
 <?php
-/**
- * inquiry-handler.php
- * -----------------------------------------------------------
- * PHP backend for the "Start a Project" inquiry form
- * (inquiry.php / 03-inquiry.html).
- *
- * Flow:
- *   1. Validate & sanitise all inputs
- *   2. INSERT a new row into `inquiries`
- *   3. Store the new ID in $_SESSION['pending_link_inquiry_id']
- *      so register.php can link it to a new account (trusted-
- *      session linking — NOT email-match linking)
- *   4. Return JSON { success, inquiry_id, name, service, budget }
- *      so the JS success modal can render confirmation data
- */
 
 session_start();
 require_once 'config/db.php';
