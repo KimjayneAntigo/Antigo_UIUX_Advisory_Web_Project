@@ -1,8 +1,4 @@
 <?php
-/**
- * admin/inquiries.php
- * Admin pipeline: Inquiries list, status management, and project conversion.
- */
 
 require_once __DIR__ . '/../includes/auth-check-admin.php';
 require_once __DIR__ . '/../config/db.php';
@@ -15,7 +11,7 @@ $pageSubheading = 'Qualify incoming leads, track client status, and convert inqu
 
 $statusWhitelist = ['new', 'reviewed', 'contacted', 'converted', 'lost'];
 
-// ─── POST Handler: Status Update or Convert to Project ───────────────────────
+// POST Handler: Status Update or Convert to Project
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action    = trim($_POST['action'] ?? '');
     $inquiryId = (int) ($_POST['inquiry_id'] ?? 0);
@@ -25,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         safe_redirect('inquiries.php');
     }
 
-    // 1. Update Status Action
+    // Update Status Action
     if ($action === 'update_status') {
         $newStatus = trim($_POST['status'] ?? '');
         if (!in_array($newStatus, $statusWhitelist, true)) {
@@ -45,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         safe_redirect('inquiries.php');
     }
 
-    // 2. Convert to Project Action
+    // Convert to Project Action
     if ($action === 'convert_to_project') {
         try {
             // Fetch inquiry row
@@ -69,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            // Generate unique project_code e.g. PRJ-3004
+            // Generate unique project_code
             $maxCodeStmt = $pdo->query('SELECT MAX(id) AS max_id FROM projects');
             $nextNum = ((int) ($maxCodeStmt->fetch()['max_id'] ?? 0)) + 3001;
             $projectCode = 'PRJ-' . $nextNum;
@@ -155,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     safe_redirect('inquiries.php');
 }
 
-// ─── Filter & Pagination ─────────────────────────────────────────────────────
+// Filter & Pagination
 $filterStatus = trim($_GET['status'] ?? '');
 $page         = max(1, (int) ($_GET['page'] ?? 1));
 $perPage      = 10;
