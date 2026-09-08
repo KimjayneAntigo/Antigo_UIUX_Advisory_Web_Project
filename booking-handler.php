@@ -1,17 +1,4 @@
 <?php
-/**
- * booking-handler.php
- * -----------------------------------------------------------
- * PHP backend for the "Confirm Consultation" booking step
- * (book-consultation.php / 02-book-consultation.html).
- *
- * Flow:
- *   1. Validate & sanitise inputs (service, date, time, format, guest info)
- *   2. INSERT a new row into `bookings`
- *   3. Store the new ID in $_SESSION['pending_link_booking_id']
- *      for trusted-session linking in register.php
- *   4. Return JSON { success, booking_id, ... } for the confirmation modal
- */
 
 session_start();
 require_once 'config/db.php';
