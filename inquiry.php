@@ -1,6 +1,7 @@
 <?php
 session_start();
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -345,6 +346,14 @@ session_start();
                     Back to Home
                 </a>
             </div>
+
+            <!-- Trusted-session registration CTA -->
+            <div class="mt-5 pt-4 border-t border-[rgba(19,34,75,0.08)]">
+                <a href="register.php" class="flex items-center justify-center gap-2 text-xs font-semibold text-[#6C5BB5] hover:underline">
+                    <iconify-icon icon="lucide:user-plus"></iconify-icon>
+                    Create an account to track this inquiry in your dashboard →
+                </a>
+            </div>
         </div>
     </div>
 
@@ -380,30 +389,49 @@ session_start();
             document.getElementById('fileChip').classList.add('hidden');
         }
 
-        function submitInquiry(e) {
+        async function submitInquiry(e) {
             e.preventDefault();
-            
-            const formData = {
-                name: document.getElementById('fullName').value.trim(),
-                email: document.getElementById('email').value.trim(),
-                company: document.getElementById('company').value.trim(),
-                projectType: document.getElementById('projectType').value,
-                budget: document.getElementById('budget').value,
-                timeline: document.getElementById('timeline').value,
-                description: document.getElementById('description').value.trim(),
-                fileName: attachedFileName
-            };
 
-            // Save to shared localStorage
-            const newInq = AntigoData.addInquiry(formData);
-            createdInquiryId = newInq.id;
+            const submitBtn = document.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.querySelector('span').innerText = 'Submitting…';
 
-            // Show Confirmation Modal
-            document.getElementById('leadNameConfirm').innerText = formData.name;
-            document.getElementById('inquiryIdDisplay').innerText = newInq.id;
-            document.getElementById('serviceDisplay').innerText = formData.projectType;
-            document.getElementById('budgetDisplay').innerText = formData.budget;
-            document.getElementById('successModal').classList.remove('hidden');
+            const body = new FormData();
+            body.append('name',        document.getElementById('fullName').value.trim());
+            body.append('email',       document.getElementById('email').value.trim());
+            body.append('company',     document.getElementById('company').value.trim());
+            body.append('projectType', document.getElementById('projectType').value);
+            body.append('budget',      document.getElementById('budget').value);
+            body.append('timeline',    document.getElementById('timeline').value);
+            body.append('description', document.getElementById('description').value.trim());
+            body.append('fileName',    attachedFileName || '');
+
+            try {
+                const res  = await fetch('inquiry-handler.php', { method: 'POST', body });
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    alert(data.error || 'Submission failed. Please try again.');
+                    submitBtn.disabled = false;
+                    submitBtn.querySelector('span').innerText = 'Submit Project Inquiry';
+                    return;
+                }
+
+                // Keep raw numeric ID for the booking URL handoff
+                createdInquiryId = data.raw_id;
+
+                // Populate & show confirmation modal
+                document.getElementById('leadNameConfirm').innerText  = data.name;
+                document.getElementById('inquiryIdDisplay').innerText = data.inquiry_id;
+                document.getElementById('serviceDisplay').innerText   = data.service;
+                document.getElementById('budgetDisplay').innerText    = data.budget;
+                document.getElementById('successModal').classList.remove('hidden');
+
+            } catch (err) {
+                alert('A network error occurred. Please check your connection and try again.');
+                submitBtn.disabled = false;
+                submitBtn.querySelector('span').innerText = 'Submit Project Inquiry';
+            }
         }
 
         function goToBooking() {
