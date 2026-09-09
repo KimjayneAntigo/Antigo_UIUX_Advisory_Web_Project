@@ -1,15 +1,136 @@
 <?php
-
 require_once 'config/session.php';
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Location: login.php'); exit; }
-?>
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+    header('Location: login.php');
+    exit;
+}
 
+require_once 'config/db.php';
+require_once 'includes/functions.php';
+require_once 'includes/routing.php';
+
+const STAGE_MAP = [
+    1 => ['phase_name' => 'Discovery & Research', 'progress' => 20,  'status' => 'Discovery',   'status_type' => 'pending'],
+    2 => ['phase_name' => 'Wireframing',           'progress' => 40,  'status' => 'Wireframing', 'status_type' => 'in_design'],
+    3 => ['phase_name' => 'UI/UX Design',          'progress' => 60,  'status' => 'UI Design',   'status_type' => 'in_design'],
+    4 => ['phase_name' => 'Prototyping',            'progress' => 80,  'status' => 'Prototyping', 'status_type' => 'in_design'],
+    5 => ['phase_name' => 'Delivered',              'progress' => 100, 'status' => 'Delivered',   'status_type' => 'completed'],
+];
+
+// Validate ?id param (supports integer id or project_code like PRJ-3001)
+$rawId = trim($_GET['id'] ?? '');
+if ($rawId === '') {
+    set_flash('error', 'No project specified.');
+    safe_redirect('admin-dashboard.php');
+}
+
+try {
+    $stmt = $pdo->prepare('SELECT * FROM projects WHERE id = ? OR project_code = ? LIMIT 1');
+    $stmt->execute([is_numeric($rawId) ? (int) $rawId : 0, $rawId]);
+    $project = $stmt->fetch();
+} catch (\PDOException $e) {
+    error_log('admin-project error: ' . $e->getMessage());
+    set_flash('error', 'Database error loading project.');
+    safe_redirect('admin-dashboard.php');
+}
+
+if (!$project) {
+    set_flash('error', 'Project not found.');
+    safe_redirect('admin-dashboard.php');
+}
+
+$projectId = (int) $project['id'];
+
+// Handle POST actions
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = trim($_POST['action'] ?? '');
+
+    // Update stage/phase
+    if ($action === 'update_stage') {
+        $stage = (int) ($_POST['stage'] ?? 0);
+        if ($stage >= 1 && $stage <= 5) {
+            $map = STAGE_MAP[$stage];
+            $uStmt = $pdo->prepare(
+                'UPDATE projects
+                 SET current_phase = ?, phase_name = ?, progress = ?, status = ?, status_type = ?, updated_at = NOW()
+                 WHERE id = ?'
+            );
+            $uStmt->execute([$stage, $map['phase_name'], $map['progress'], $map['status'], $map['status_type'], $projectId]);
+            set_flash('success', "Stage updated to Phase {$stage}: {$map['phase_name']}.");
+        }
+        safe_redirect("admin-project.php?id={$projectId}");
+    }
+
+    // Update notes
+    if ($action === 'update_notes') {
+        $notes = trim($_POST['notes'] ?? '');
+        $uStmt = $pdo->prepare('UPDATE projects SET internal_notes = ?, updated_at = NOW() WHERE id = ?');
+        $uStmt->execute([$notes, $projectId]);
+        set_flash('success', 'Internal notes saved.');
+        safe_redirect("admin-project.php?id={$projectId}");
+    }
+
+    // Post message
+    if ($action === 'send_message') {
+        $msg = trim($_POST['message'] ?? '');
+        if ($msg !== '') {
+            $sender = $_SESSION['user_name'] ?? 'Kimberly Jayne Antigo';
+            $mStmt = $pdo->prepare('INSERT INTO project_messages (project_id, sender, role, message, created_at) VALUES (?, ?, \'designer\', ?, NOW())');
+            $mStmt->execute([$projectId, $sender, $msg]);
+            set_flash('success', 'Message sent to client.');
+        }
+        safe_redirect("admin-project.php?id={$projectId}");
+    }
+
+    // Upload deliverable file
+    if ($action === 'upload_file' && isset($_FILES['file'])) {
+        $file = $_FILES['file'];
+        if ($file['error'] === UPLOAD_ERR_OK) {
+            $allowedExts = ['pdf', 'png', 'jpg', 'jpeg', 'zip', 'fig', 'svg'];
+            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            if (in_array($ext, $allowedExts, true)) {
+                $uploadDir = __DIR__ . '/uploads/projects/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+                $safeName = preg_replace('/[^a-zA-Z0-9_\.-]/', '_', basename($file['name']));
+                $fileName = time() . '_' . $safeName;
+                $destPath = $uploadDir . $fileName;
+                if (move_uploaded_file($file['tmp_name'], $destPath)) {
+                    $sizeFormatted = round($file['size'] / (1024 * 1024), 1) . ' MB';
+                    if ($file['size'] < 1024 * 1024) {
+                        $sizeFormatted = round($file['size'] / 1024, 1) . ' KB';
+                    }
+                    $fStmt = $pdo->prepare('INSERT INTO project_files (project_id, uploaded_by, name, size, file_path, uploaded_at) VALUES (?, ?, ?, ?, ?, NOW())');
+                    $fStmt->execute([$projectId, (int) $_SESSION['user_id'], $file['name'], $sizeFormatted, 'uploads/projects/' . $fileName]);
+                    set_flash('success', "File \"{$file['name']}\" uploaded successfully.");
+                } else {
+                    set_flash('error', 'Failed to save uploaded file.');
+                }
+            } else {
+                set_flash('error', 'Invalid file format. Allowed: pdf, png, jpg, zip, fig, svg.');
+            }
+        }
+        safe_redirect("admin-project.php?id={$projectId}");
+    }
+}
+
+// Fetch files
+$filesStmt = $pdo->prepare('SELECT * FROM project_files WHERE project_id = ? ORDER BY uploaded_at DESC');
+$filesStmt->execute([$projectId]);
+$files = $filesStmt->fetchAll();
+
+// Fetch messages
+$messagesStmt = $pdo->prepare('SELECT * FROM project_messages WHERE project_id = ? ORDER BY created_at ASC');
+$messagesStmt->execute([$projectId]);
+$messages = $messagesStmt->fetchAll();
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Project Control | Antigo UI/UX Advisory</title>
+    <title><?= htmlspecialchars($project['title']) ?> | Admin Project Control</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -80,7 +201,6 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
             box-shadow: 0 4px 18px -4px rgba(19, 34, 75, 0.05);
         }
 
-        /* Distinct warm-neutral Admin Internal Notes block */
         .internal-notes-block {
             background-color: #FFF8E8;
             border-left: 4px solid #F59E0B;
@@ -119,26 +239,30 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
     <header class="w-full bg-[#13224B] text-white sticky top-0 z-50 shadow-md">
         <div class="max-w-[1440px] mx-auto px-6 lg:px-10 h-20 flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <a href="admin-dashboard.php" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-colors">
+                <a href="admin-dashboard.php" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-colors" title="Back to Dashboard">
                     <iconify-icon icon="lucide:arrow-left" class="text-lg"></iconify-icon>
                 </a>
                 <div>
-                    <span class="text-[9px] font-bold uppercase tracking-widest text-[#DDEBFF]" id="adminCatBadge">Fintech · Mobile App</span>
-                    <h1 class="text-base font-bold text-white" id="adminProjectTitle">Pesolink Mobile Banking Redesign</h1>
+                    <span class="text-[9px] font-bold uppercase tracking-widest text-[#DDEBFF]"><?= htmlspecialchars($project['category'] ?? 'UI/UX Design') ?> &middot; <?= htmlspecialchars($project['project_code']) ?></span>
+                    <h1 class="text-base font-bold text-white"><?= htmlspecialchars($project['title']) ?></h1>
                 </div>
             </div>
 
             <div class="flex items-center gap-3">
-                <button onclick="saveProjectChanges()" class="px-4 py-2 rounded-xl bg-[#4C6CCB] hover:bg-[#3d5bb8] text-white text-xs font-bold shadow-sm flex items-center gap-2 transition-colors">
-                    <iconify-icon icon="lucide:save"></iconify-icon>
-                    <span>Save Project State</span>
-                </button>
+                <a href="admin-dashboard.php" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors">
+                    Dashboard
+                </a>
             </div>
         </div>
     </header>
 
+    <!-- Flash Messages -->
+    <div class="max-w-[1440px] mx-auto px-6 lg:px-10 pt-6 w-full">
+        <?= render_flash() ?>
+    </div>
+
     <!-- Main Content -->
-    <main class="flex-1 max-w-[1440px] w-full mx-auto px-6 lg:px-10 py-8 space-y-8">
+    <main class="flex-1 max-w-[1440px] w-full mx-auto px-6 lg:px-10 py-4 space-y-8">
         
         <!-- Status & Phase Management Control Bar -->
         <div class="admin-card p-6 sm:p-8">
@@ -149,22 +273,44 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
                     <p class="text-xs text-[#8890AA]">Updating this phase controls what the client sees in their portal stepper in real time.</p>
                 </div>
 
-                <!-- Phase Dropdown -->
-                <div class="flex items-center gap-3">
+                <!-- Phase Dropdown Form -->
+                <form method="POST" action="admin-project.php?id=<?= $projectId ?>" class="flex items-center gap-3">
+                    <input type="hidden" name="action" value="update_stage">
                     <label class="text-xs font-bold text-[#8890AA] whitespace-nowrap">Current Phase:</label>
-                    <select id="phaseSelector" onchange="handlePhaseChange(this.value)" class="select-input px-4 py-2.5 rounded-xl text-xs font-bold cursor-pointer">
-                        <option value="1">Phase 1: Discovery &amp; Research (20%)</option>
-                        <option value="2">Phase 2: Wireframing &amp; Flows (40%)</option>
-                        <option value="3" selected>Phase 3: UI/UX Design &amp; Mockups (60%)</option>
-                        <option value="4">Phase 4: Interactive Prototype (80%)</option>
-                        <option value="5">Phase 5: Handover &amp; Assets (100%)</option>
+                    <select name="stage" onchange="this.form.submit()" class="select-input px-4 py-2.5 rounded-xl text-xs font-bold cursor-pointer">
+                        <?php foreach (STAGE_MAP as $sNum => $sInfo): ?>
+                            <option value="<?= $sNum ?>" <?= ((int)$project['current_phase'] === $sNum) ? 'selected' : '' ?>>
+                                Phase <?= $sNum ?>: <?= htmlspecialchars($sInfo['phase_name']) ?> (<?= $sInfo['progress'] ?>%)
+                            </option>
+                        <?php endforeach; ?>
                     </select>
-                </div>
+                </form>
             </div>
 
             <!-- Visual Stepper Preview -->
-            <div class="grid grid-cols-1 sm:grid-cols-5 gap-3" id="adminStepperContainer">
-                <!-- Populated by JS -->
+            <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                <?php 
+                $curPhase = (int) $project['current_phase'];
+                foreach (STAGE_MAP as $step => $sInfo): 
+                    $isPast = $step < $curPhase;
+                    $isCurrent = $step === $curPhase;
+                ?>
+                    <div class="p-3 rounded-2xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.06)] flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 <?= $isPast ? 'bg-[#10b981] text-white' : ($isCurrent ? 'bg-gradient-to-r from-[#4C6CCB] to-[#6C5BB5] text-white shadow-md ring-2 ring-[#6C5BB5]/30' : 'bg-white border border-[rgba(19,34,75,0.15)] text-[#8890AA]') ?>">
+                            <?php if ($isPast): ?>
+                                <iconify-icon icon="lucide:check" class="text-white text-sm"></iconify-icon>
+                            <?php elseif ($isCurrent): ?>
+                                <span class="text-white font-bold text-xs"><?= $step ?></span>
+                            <?php else: ?>
+                                <span class="text-[#8890AA] text-xs font-semibold"><?= $step ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <div>
+                            <div class="text-[9px] uppercase font-bold text-[#8890AA]">Phase <?= $step ?></div>
+                            <div class="text-xs font-bold text-[#13224B] truncate"><?= htmlspecialchars($sInfo['phase_name']) ?></div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
             </div>
         </div>
 
@@ -180,19 +326,19 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                         <div class="p-3.5 bg-[#F4F6F8] rounded-xl border border-[rgba(19,34,75,0.06)]">
                             <span class="text-[#8890AA] block mb-1">Client Name</span>
-                            <strong class="text-sm font-bold text-[#13224B]" id="adminClientName">Maria Santos</strong>
+                            <strong class="text-sm font-bold text-[#13224B]"><?= htmlspecialchars($project['client_name'] ?? 'Direct Client') ?></strong>
                         </div>
                         <div class="p-3.5 bg-[#F4F6F8] rounded-xl border border-[rgba(19,34,75,0.06)]">
                             <span class="text-[#8890AA] block mb-1">Company</span>
-                            <strong class="text-sm font-bold text-[#13224B]" id="adminClientCompany">Pesolink Financial</strong>
+                            <strong class="text-sm font-bold text-[#13224B]"><?= htmlspecialchars($project['company'] ?: 'Direct Client') ?></strong>
                         </div>
                         <div class="p-3.5 bg-[#F4F6F8] rounded-xl border border-[rgba(19,34,75,0.06)]">
                             <span class="text-[#8890AA] block mb-1">Contract Value</span>
-                            <strong class="text-sm font-extrabold text-[#4C6CCB]" id="adminBudget">$250,000</strong>
+                            <strong class="text-sm font-extrabold text-[#4C6CCB]"><?= htmlspecialchars($project['budget'] ?: '$150,000') ?></strong>
                         </div>
                         <div class="p-3.5 bg-[#F4F6F8] rounded-xl border border-[rgba(19,34,75,0.06)]">
                             <span class="text-[#8890AA] block mb-1">Due Date</span>
-                            <strong class="text-sm font-bold text-[#13224B]" id="adminDueDate">Sep 30, 2026</strong>
+                            <strong class="text-sm font-bold text-[#13224B]"><?= !empty($project['due_date']) ? date('M j, Y', strtotime($project['due_date'])) : 'TBD' ?></strong>
                         </div>
                     </div>
                 </div>
@@ -209,34 +355,59 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
                         <span class="text-[11px] text-[#8890AA] italic">Not visible to client</span>
                     </div>
                     
-                    <div class="internal-notes-block p-4 rounded-2xl mb-4 text-xs text-[#946200] leading-relaxed">
-                        <textarea id="adminNotesTextarea" rows="3" class="w-full bg-transparent border-none outline-none resize-none font-medium text-xs text-[#946200] italic leading-relaxed" placeholder="Add confidential studio notes, billing milestones, design strategy..."></textarea>
-                    </div>
+                    <form method="POST" action="admin-project.php?id=<?= $projectId ?>">
+                        <input type="hidden" name="action" value="update_notes">
+                        <div class="internal-notes-block p-4 rounded-2xl mb-4 text-xs text-[#946200] leading-relaxed">
+                            <textarea name="notes" rows="4" class="w-full bg-transparent border-none outline-none resize-none font-medium text-xs text-[#946200] italic leading-relaxed" placeholder="Add confidential studio notes, billing milestones, design strategy..."><?= htmlspecialchars($project['internal_notes'] ?? '') ?></textarea>
+                        </div>
 
-                    <div class="flex justify-end">
-                        <button type="button" onclick="saveAdminNotes()" class="px-4 py-2 rounded-xl bg-white border border-[rgba(19,34,75,0.12)] text-xs font-bold text-[#13224B] hover:bg-[#F4F6F8] transition-colors">
-                            Update Notes
-                        </button>
-                    </div>
+                        <div class="flex justify-end">
+                            <button type="submit" class="px-4 py-2 rounded-xl bg-white border border-[rgba(19,34,75,0.12)] text-xs font-bold text-[#13224B] hover:bg-[#F4F6F8] transition-colors">
+                                Update Notes
+                            </button>
+                        </div>
+                    </form>
                 </div>
 
                 <!-- Deliverables Management -->
                 <div class="admin-card p-6 sm:p-8">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-base font-bold text-[#13224B]">Deliverables Repository</h3>
-                        <span class="text-xs text-[#6C5BB5] font-semibold" id="adminFilesCount">3 Files</span>
+                        <span class="text-xs text-[#6C5BB5] font-semibold"><?= count($files) ?> Files</span>
                     </div>
 
-                    <div class="space-y-3 mb-5" id="adminFilesList">
-                        <!-- Populated by JS -->
+                    <div class="space-y-3 mb-5">
+                        <?php if (empty($files)): ?>
+                            <p class="text-xs text-[#8890AA] py-4 text-center">No deliverable files uploaded yet.</p>
+                        <?php else: ?>
+                            <?php foreach ($files as $f): ?>
+                                <div class="p-3.5 rounded-xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.06)] flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-lg bg-white border border-[rgba(19,34,75,0.08)] flex items-center justify-center text-[#6C5BB5]">
+                                            <iconify-icon icon="lucide:file-text"></iconify-icon>
+                                        </div>
+                                        <div>
+                                            <div class="text-xs font-bold text-[#13224B]"><?= htmlspecialchars($f['name']) ?></div>
+                                            <div class="text-[10px] text-[#8890AA]"><?= htmlspecialchars($f['size'] ?? '') ?> &middot; Uploaded <?= date('M j, Y', strtotime($f['uploaded_at'])) ?></div>
+                                        </div>
+                                    </div>
+                                    <a href="download.php?file_id=<?= (int)$f['id'] ?>" class="text-xs text-[#4C6CCB] font-bold hover:underline">
+                                        Download
+                                    </a>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     </div>
 
-                    <div class="p-4 bg-[#F4F6F8] rounded-2xl border border-dashed border-[rgba(19,34,75,0.14)] text-center cursor-pointer" onclick="document.getElementById('adminUploadInput').click()">
-                        <input type="file" id="adminUploadInput" onchange="handleAdminUpload(this)" class="hidden">
-                        <iconify-icon icon="lucide:upload" class="text-xl text-[#6C5BB5] mb-1"></iconify-icon>
-                        <div class="text-xs font-bold text-[#13224B]">Upload New Deliverable Asset for Client</div>
-                        <div class="text-[10px] text-[#8890AA]">Figma file, PDF report, or ZIP package</div>
-                    </div>
+                    <form method="POST" action="admin-project.php?id=<?= $projectId ?>" enctype="multipart/form-data" id="adminUploadForm">
+                        <input type="hidden" name="action" value="upload_file">
+                        <input type="file" name="file" onchange="this.form.submit()" class="hidden" id="adminUploadInput">
+                        <div class="p-4 bg-[#F4F6F8] rounded-2xl border border-dashed border-[rgba(19,34,75,0.14)] text-center cursor-pointer hover:border-[#6C5BB5] transition-colors" onclick="document.getElementById('adminUploadInput').click()">
+                            <iconify-icon icon="lucide:upload" class="text-xl text-[#6C5BB5] mb-1"></iconify-icon>
+                            <div class="text-xs font-bold text-[#13224B]">Upload New Deliverable Asset for Client</div>
+                            <div class="text-[10px] text-[#8890AA]">Figma file, PDF report, or ZIP package</div>
+                        </div>
+                    </form>
                 </div>
             </div>
 
@@ -246,7 +417,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
                     <div class="flex items-center justify-between pb-4 border-b border-[rgba(19,34,75,0.08)] mb-4">
                         <div>
                             <h3 class="text-sm font-bold text-[#13224B]">Client Conversation</h3>
-                            <p class="text-[10px] text-[#8890AA]">Posting as Kimberly Jayne Antigo (Designer)</p>
+                            <p class="text-[10px] text-[#8890AA]">Posting as <?= htmlspecialchars($_SESSION['user_name'] ?? 'Admin') ?> (Designer)</p>
                         </div>
                         <span class="px-2.5 py-0.5 rounded-full bg-[#DDEBFF] text-[#13224B] text-[10px] font-bold">
                             Live Thread
@@ -255,12 +426,26 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
 
                     <!-- Messages View -->
                     <div id="adminMessagesContainer" class="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
-                        <!-- Populated by JS -->
+                        <?php if (empty($messages)): ?>
+                            <p class="text-xs text-[#8890AA] text-center my-auto">No messages in conversation yet.</p>
+                        <?php else: ?>
+                            <?php foreach ($messages as $m): 
+                                $isDesigner = ($m['role'] ?? '') === 'designer';
+                            ?>
+                                <div class="flex flex-col <?= $isDesigner ? 'items-end' : 'items-start' ?>">
+                                    <div class="text-[10px] text-[#8890AA] mb-1 px-1"><?= htmlspecialchars($m['sender']) ?> &middot; <?= date('M j, g:i a', strtotime($m['created_at'])) ?></div>
+                                    <div class="max-w-[85%] p-3 text-xs leading-relaxed <?= $isDesigner ? 'chat-bubble-admin' : 'chat-bubble-client' ?>">
+                                        <?= nl2br(htmlspecialchars($m['message'])) ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     </div>
 
                     <!-- Post Reply Form -->
-                    <form onsubmit="sendAdminMessage(event)" class="mt-4 pt-3 border-t border-[rgba(19,34,75,0.08)] flex gap-2">
-                        <input type="text" id="adminChatInput" placeholder="Reply to client as Kimberly..." required class="flex-1 px-4 py-3 rounded-xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.1)] text-xs text-[#13224B] focus:outline-none focus:border-[#6C5BB5] focus:bg-white">
+                    <form method="POST" action="admin-project.php?id=<?= $projectId ?>" class="mt-4 pt-3 border-t border-[rgba(19,34,75,0.08)] flex gap-2">
+                        <input type="hidden" name="action" value="send_message">
+                        <input type="text" name="message" placeholder="Reply to client as Kimberly..." required class="flex-1 px-4 py-3 rounded-xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.1)] text-xs text-[#13224B] focus:outline-none focus:border-[#6C5BB5] focus:bg-white">
                         <button type="submit" class="w-11 h-11 rounded-xl text-white flex items-center justify-center shadow-md hover:scale-105 transition-transform" style="background:var(--grad);">
                             <iconify-icon icon="lucide:send" class="text-base"></iconify-icon>
                         </button>
@@ -275,183 +460,13 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header('Loc
         &copy; 2026 Antigo UI/UX Advisory &middot; Admin Control Panel
     </footer>
 
-    <script src="js/app-data.js"></script>
     <script>
-        let currentProjectId = 'PRJ-3001';
-        let projectData = null;
-
-        const PHASES = [
-            { step: 1, name: 'Discovery & Research' },
-            { step: 2, name: 'Wireframing' },
-            { step: 3, name: 'UI/UX Design' },
-            { step: 4, name: 'Interactive Prototype' },
-            { step: 5, name: 'Handover & Assets' }
-        ];
-
         document.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const pId = urlParams.get('id');
-            if (pId) currentProjectId = pId;
-
-            projectData = AntigoData.getProject(currentProjectId);
-            if (!projectData) {
-                projectData = AntigoData.getProjects()[0];
-                currentProjectId = projectData.id;
-            }
-
-            renderAll();
-        });
-
-        function renderAll() {
-            document.getElementById('adminCatBadge').innerText = projectData.category;
-            document.getElementById('adminProjectTitle').innerText = projectData.title;
-            document.getElementById('adminClientName').innerText = projectData.clientName;
-            document.getElementById('adminClientCompany').innerText = projectData.company || 'Direct Client';
-            document.getElementById('adminBudget').innerText = projectData.budget;
-            document.getElementById('adminDueDate').innerText = projectData.dueDate;
-            document.getElementById('adminNotesTextarea').value = projectData.internalNotes || '';
-            document.getElementById('phaseSelector').value = projectData.currentPhase.toString();
-
-            renderStepper();
-            renderFiles();
-            renderMessages();
-        }
-
-        function renderStepper() {
-            const container = document.getElementById('adminStepperContainer');
-            container.innerHTML = '';
-
-            PHASES.forEach(p => {
-                let stateClass = '';
-                let iconHtml = '';
-
-                if (p.step < projectData.currentPhase) {
-                    iconHtml = '<iconify-icon icon="lucide:check" class="text-white text-sm"></iconify-icon>';
-                    stateClass = 'bg-[#10b981] text-white';
-                } else if (p.step === projectData.currentPhase) {
-                    iconHtml = `<span class="text-white font-bold text-xs">${p.step}</span>`;
-                    stateClass = 'bg-gradient-to-r from-[#4C6CCB] to-[#6C5BB5] text-white shadow-md ring-2 ring-[#6C5BB5]/30';
-                } else {
-                    iconHtml = `<span class="text-[#8890AA] text-xs font-semibold">${p.step}</span>`;
-                    stateClass = 'bg-white border border-[rgba(19,34,75,0.15)] text-[#8890AA]';
-                }
-
-                const itemHtml = `
-                    <div class="p-3 rounded-2xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.06)] flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${stateClass}">
-                            ${iconHtml}
-                        </div>
-                        <div>
-                            <div class="text-[9px] uppercase font-bold text-[#8890AA]">Phase ${p.step}</div>
-                            <div class="text-xs font-bold text-[#13224B] truncate">${p.name}</div>
-                        </div>
-                    </div>
-                `;
-                container.insertAdjacentHTML('beforeend', itemHtml);
-            });
-        }
-
-        function handlePhaseChange(val) {
-            const phaseNum = parseInt(val);
-            const phaseObj = PHASES.find(p => p.step === phaseNum);
-            let statusText = 'In Design';
-            let statusType = 'in_design';
-
-            if (phaseNum === 1) { statusText = 'Discovery'; statusType = 'pending'; }
-            if (phaseNum === 2) { statusText = 'Wireframing'; statusType = 'in_design'; }
-            if (phaseNum === 3) { statusText = 'UI Design'; statusType = 'in_design'; }
-            if (phaseNum === 4) { statusText = 'Prototyping'; statusType = 'in_design'; }
-            if (phaseNum === 5) { statusText = 'Delivered'; statusType = 'completed'; }
-
-            AntigoData.updateProjectPhase(currentProjectId, phaseNum, phaseObj.name, statusText, statusType);
-            projectData = AntigoData.getProject(currentProjectId);
-            renderStepper();
-            alert(`Project phase updated to: Phase ${phaseNum} - ${phaseObj.name}. Synced to client portal.`);
-        }
-
-        function saveAdminNotes() {
-            const notes = document.getElementById('adminNotesTextarea').value;
-            AntigoData.updateProjectNotes(currentProjectId, notes);
-            alert('Admin internal notes saved securely.');
-        }
-
-        function saveProjectChanges() {
-            saveAdminNotes();
-            alert('All project settings saved.');
-        }
-
-        function renderFiles() {
-            const container = document.getElementById('adminFilesList');
-            container.innerHTML = '';
-            const files = projectData.files || [];
-            document.getElementById('adminFilesCount').innerText = `${files.length} Files`;
-
-            files.forEach(f => {
-                const rowHtml = `
-                    <div class="p-3.5 rounded-xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.06)] flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg bg-white border border-[rgba(19,34,75,0.08)] flex items-center justify-center text-[#6C5BB5]">
-                                <iconify-icon icon="lucide:file-text"></iconify-icon>
-                            </div>
-                            <div>
-                                <div class="text-xs font-bold text-[#13224B]">${f.name}</div>
-                                <div class="text-[10px] text-[#8890AA]">${f.size} · Uploaded ${f.date}</div>
-                            </div>
-                        </div>
-                        <button onclick="alert('Downloading ${f.name}...')" class="text-xs text-[#4C6CCB] font-bold hover:underline">
-                            Download
-                        </button>
-                    </div>
-                `;
-                container.insertAdjacentHTML('beforeend', rowHtml);
-            });
-        }
-
-        function handleAdminUpload(input) {
-            if (input.files && input.files[0]) {
-                const file = input.files[0];
-                const newFileObj = {
-                    name: file.name,
-                    size: (file.size / (1024 * 1024)).toFixed(1) + ' MB',
-                    date: 'Just now'
-                };
-                AntigoData.addProjectFile(currentProjectId, newFileObj);
-                projectData = AntigoData.getProject(currentProjectId);
-                renderFiles();
-                alert(`Deliverable "${file.name}" attached for client access.`);
-            }
-        }
-
-        function renderMessages() {
             const container = document.getElementById('adminMessagesContainer');
-            container.innerHTML = '';
-            const messages = AntigoData.getProjectMessages(currentProjectId);
-
-            messages.forEach(m => {
-                const isAdmin = m.role === 'designer';
-                const msgHtml = `
-                    <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'}">
-                        <div class="text-[10px] text-[#8890AA] mb-1 px-1">${m.sender} · ${m.time}</div>
-                        <div class="max-w-[85%] p-3 text-xs leading-relaxed ${isAdmin ? 'chat-bubble-admin' : 'chat-bubble-client'}">
-                            ${m.text}
-                        </div>
-                    </div>
-                `;
-                container.insertAdjacentHTML('beforeend', msgHtml);
-            });
-            container.scrollTop = container.scrollHeight;
-        }
-
-        function sendAdminMessage(e) {
-            e.preventDefault();
-            const input = document.getElementById('adminChatInput');
-            const text = input.value.trim();
-            if (!text) return;
-
-            AntigoData.addProjectMessage(currentProjectId, 'Kimberly Jayne Antigo', 'designer', text);
-            input.value = '';
-            renderMessages();
-        }
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+            }
+        });
     </script>
 </body>
 </html>

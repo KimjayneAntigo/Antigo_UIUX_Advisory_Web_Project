@@ -7,6 +7,7 @@
 require_once __DIR__ . '/../includes/auth-check-client.php';
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/routing.php';
 
 $activePage     = 'dashboard';
 $pageTitle      = 'Client Dashboard — Workspace';
@@ -23,20 +24,92 @@ $rawName   = $_SESSION['user_name'] ?? $_SESSION['name'] ?? 'Client';
 $nameParts = explode(' ', trim($rawName));
 $firstName = htmlspecialchars($nameParts[0], ENT_QUOTES, 'UTF-8');
 
-// Stat Cards Queries (Strictly scoped to $userId)
+// POST Handlers: Settings (Profile & Password updates)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = trim($_POST['action'] ?? '');
+
+    if ($action === 'update_profile') {
+        $newName    = trim($_POST['name'] ?? '');
+        $newCompany = trim($_POST['company'] ?? '');
+
+        if (empty($newName)) {
+            set_flash('error', 'Full name cannot be empty.');
+        } else {
+            try {
+                $stmt = $pdo->prepare('UPDATE users SET name = ?, company = ? WHERE id = ?');
+                $stmt->execute([$newName, $newCompany ?: null, $userId]);
+
+                $_SESSION['user_name'] = $newName;
+                $_SESSION['name']      = $newName;
+                set_flash('success', 'Profile updated successfully.');
+            } catch (\PDOException $e) {
+                error_log('client/dashboard update_profile error: ' . $e->getMessage());
+                set_flash('error', 'Database error updating profile.');
+            }
+        }
+        safe_redirect('dashboard.php#settings');
+    }
+
+    if ($action === 'change_password') {
+        $currentPass = $_POST['current_password'] ?? '';
+        $newPass     = $_POST['new_password'] ?? '';
+        $confirmPass = $_POST['confirm_password'] ?? '';
+
+        if (empty($currentPass) || empty($newPass) || empty($confirmPass)) {
+            set_flash('error', 'All password fields are required.');
+        } elseif (strlen($newPass) < 6) {
+            set_flash('error', 'New password must be at least 6 characters long.');
+        } elseif ($newPass !== $confirmPass) {
+            set_flash('error', 'New password and confirmation do not match.');
+        } else {
+            try {
+                $stmt = $pdo->prepare('SELECT password_hash FROM users WHERE id = ? LIMIT 1');
+                $stmt->execute([$userId]);
+                $userRow = $stmt->fetch();
+
+                if (!$userRow || !password_verify($currentPass, $userRow['password_hash'])) {
+                    set_flash('error', 'Current password is incorrect.');
+                } else {
+                    $newHash = password_hash($newPass, PASSWORD_DEFAULT);
+                    $updStmt = $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+                    $updStmt->execute([$newHash, $userId]);
+                    set_flash('success', 'Password updated successfully.');
+                }
+            } catch (\PDOException $e) {
+                error_log('client/dashboard change_password error: ' . $e->getMessage());
+                set_flash('error', 'Database error updating password.');
+            }
+        }
+        safe_redirect('dashboard.php#settings');
+    }
+}
+
+// Queries (Strictly scoped to $userId to prevent IDOR)
 $activeProjectsCount = 0;
 $totalFilesCount     = 0;
 $messagesCount       = 0;
 $projects            = [];
+$pendingInquiries    = [];
+$clientFiles         = [];
+$clientMessages      = [];
 $recentActivities    = [];
+$currentUserProfile  = ['name' => $rawName, 'email' => $_SESSION['email'] ?? '', 'company' => ''];
 
 try {
-    // Active Projects
+    // Current User Details for Settings
+    $stmtUser = $pdo->prepare('SELECT name, email, company, created_at FROM users WHERE id = ? LIMIT 1');
+    $stmtUser->execute([$userId]);
+    $uData = $stmtUser->fetch();
+    if ($uData) {
+        $currentUserProfile = $uData;
+    }
+
+    // Active Projects Count
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM projects WHERE user_id = :uid AND status_type != 'completed'");
     $stmt->execute(['uid' => $userId]);
     $activeProjectsCount = (int) $stmt->fetchColumn();
 
-    // Total Files Shared
+    // Total Files Shared Count
     $stmt = $pdo->prepare(
         'SELECT COUNT(*)
          FROM project_files pf
@@ -46,7 +119,7 @@ try {
     $stmt->execute(['uid' => $userId]);
     $totalFilesCount = (int) $stmt->fetchColumn();
 
-    // Designer Messages
+    // Designer Messages Count
     $stmt = $pdo->prepare(
         "SELECT COUNT(*)
          FROM project_messages pm
@@ -56,7 +129,7 @@ try {
     $stmt->execute(['uid' => $userId]);
     $messagesCount = (int) $stmt->fetchColumn();
 
-    // Your Projects List (Strictly scoped to $userId)
+    // Active Projects List
     $stmt = $pdo->prepare(
         'SELECT * FROM projects
          WHERE user_id = :uid
@@ -65,32 +138,61 @@ try {
     $stmt->execute(['uid' => $userId]);
     $projects = $stmt->fetchAll();
 
-    // Recent Activity (Merged Files + Messages)
+    // Pending Review Inquiries (Live intake list for this client)
+    $stmtInq = $pdo->prepare(
+        "SELECT * FROM inquiries
+         WHERE user_id = :uid AND status != 'converted'
+         ORDER BY created_at DESC"
+    );
+    $stmtInq->execute(['uid' => $userId]);
+    $pendingInquiries = $stmtInq->fetchAll();
+
+    // All Client Deliverable Files (Download-only, scoped strictly to $userId)
     $stmtFiles = $pdo->prepare(
-        "SELECT 'file' AS act_type, pf.name AS act_text, pf.uploaded_at AS act_time,
-                p.id AS project_id, p.title AS project_title, 'New deliverable uploaded' AS act_sub
+        'SELECT pf.*, p.title AS project_title, p.project_code
          FROM project_files pf
          JOIN projects p ON pf.project_id = p.id
          WHERE p.user_id = :uid
-         ORDER BY pf.uploaded_at DESC
-         LIMIT 6"
+         ORDER BY pf.uploaded_at DESC'
     );
     $stmtFiles->execute(['uid' => $userId]);
-    $fileActs = $stmtFiles->fetchAll();
+    $clientFiles = $stmtFiles->fetchAll();
 
+    // All Client Messages (Scoped strictly to $userId)
     $stmtMsgs = $pdo->prepare(
-        "SELECT 'message' AS act_type, pm.message AS act_text, pm.created_at AS act_time,
-                p.id AS project_id, p.title AS project_title, CONCAT('Message from ', pm.sender) AS act_sub
+        'SELECT pm.*, p.title AS project_title, p.project_code
          FROM project_messages pm
          JOIN projects p ON pm.project_id = p.id
          WHERE p.user_id = :uid
          ORDER BY pm.created_at DESC
-         LIMIT 6"
+         LIMIT 15'
     );
     $stmtMsgs->execute(['uid' => $userId]);
-    $msgActs = $stmtMsgs->fetchAll();
+    $clientMessages = $stmtMsgs->fetchAll();
 
-    // Merge and sort newest first
+    // Recent Activity Feed (Merged Files + Messages)
+    $fileActs = array_map(function ($f) {
+        return [
+            'act_type'      => 'file',
+            'act_text'      => $f['name'],
+            'act_time'      => $f['uploaded_at'],
+            'project_id'    => $f['project_id'],
+            'project_title' => $f['project_title'],
+            'act_sub'       => 'New deliverable uploaded',
+        ];
+    }, array_slice($clientFiles, 0, 6));
+
+    $msgActs = array_map(function ($m) {
+        return [
+            'act_type'      => 'message',
+            'act_text'      => $m['message'],
+            'act_time'      => $m['created_at'],
+            'project_id'    => $m['project_id'],
+            'project_title' => $m['project_title'],
+            'act_sub'       => 'Message from ' . $m['sender'],
+        ];
+    }, array_slice($clientMessages, 0, 6));
+
     $recentActivities = array_merge($fileActs, $msgActs);
     usort($recentActivities, function ($a, $b) {
         return strtotime($b['act_time']) <=> strtotime($a['act_time']);
@@ -134,7 +236,7 @@ try {
   <div class="main-content">
     <?php require_once __DIR__ . '/../includes/header-client.php'; ?>
 
-    <main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
 
       <!-- Flash Notification -->
       <?= render_flash() ?>
@@ -151,7 +253,7 @@ try {
               Welcome back, <?= $firstName ?>!
             </h2>
             <p class="text-xs sm:text-sm text-[#DDEBFF] max-w-xl leading-relaxed">
-              Track the live design deliverables, milestone progress, and consult directly with your assigned Antigo advisory team.
+              Track live design deliverables, milestone progress, and consult directly with your assigned Antigo advisory team.
             </p>
           </div>
 
@@ -212,11 +314,13 @@ try {
       <!-- Main Grid: Projects List + Recent Activity -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
-        <!-- Left: Your Projects (2 Cols) -->
-        <div class="lg:col-span-2 space-y-5" id="projects">
+        <!-- Left: Projects and Pending Inquiries (2 Cols) -->
+        <div class="lg:col-span-2 space-y-6" id="projects">
+          
+          <!-- Section Heading -->
           <div class="flex items-center justify-between">
             <div>
-              <h3 class="text-lg font-bold text-[#13224B]">Your Projects</h3>
+              <h3 class="text-lg font-bold text-[#13224B]">My Projects</h3>
               <p class="text-xs text-[#8890AA] mt-0.5">Live overview of your design deliverables and timeline milestones.</p>
             </div>
             <a href="../inquiry.php" class="text-xs font-bold text-[#4C6CCB] hover:text-[#6C5BB5] flex items-center gap-1">
@@ -224,22 +328,62 @@ try {
             </a>
           </div>
 
-          <?php if (empty($projects)): ?>
-            <div class="card p-12 text-center border border-[rgba(19,34,75,0.08)]">
-              <div class="w-16 h-16 rounded-2xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-3xl mx-auto mb-4">
-                <iconify-icon icon="lucide:folder-plus"></iconify-icon>
+          <!-- Pending Review Inquiries (Live intake created by this client) -->
+          <?php if (!empty($pendingInquiries)): ?>
+            <div class="space-y-3">
+              <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#6C5BB5]">
+                <iconify-icon icon="lucide:clock" class="text-sm"></iconify-icon>
+                <span>Pending Review Inquiries (<?= count($pendingInquiries) ?>)</span>
               </div>
-              <h4 class="text-base font-bold text-[#13224B]">No Active Projects Yet</h4>
-              <p class="text-xs text-[#8890AA] mt-1.5 max-w-md mx-auto leading-relaxed">
-                Ready to elevate your digital product with expert UI/UX advisory? Submit your project requirements to start collaborating.
-              </p>
-              <a href="../inquiry.php"
-                 class="inline-flex items-center gap-2 mt-5 px-6 py-3 rounded-full text-xs font-bold text-white shadow-md hover:opacity-90 transition-all"
-                 style="background: linear-gradient(135deg, #4C6CCB, #6C5BB5);">
-                <iconify-icon icon="lucide:plus"></iconify-icon>
-                <span>Start a Project</span>
-              </a>
+              <?php foreach ($pendingInquiries as $inq): ?>
+                <div class="card p-5 border border-purple-200/80 bg-purple-50/30 rounded-2xl">
+                  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+                    <div class="flex items-center gap-2">
+                      <span class="px-2 py-0.5 rounded bg-[#13224B] font-mono text-[10px] font-bold text-white">
+                        <?= htmlspecialchars($inq['ref_code'], ENT_QUOTES, 'UTF-8') ?>
+                      </span>
+                      <h4 class="text-sm font-bold text-[#13224B]">
+                        <?= htmlspecialchars($inq['service'] ?: $inq['project_type'] ?: 'Project Inquiry', ENT_QUOTES, 'UTF-8') ?>
+                      </h4>
+                    </div>
+                    <div>
+                      <?= status_badge($inq['status']) ?>
+                    </div>
+                  </div>
+                  <p class="text-xs text-[#4b4b4b] line-clamp-2 mb-3 leading-relaxed">
+                    <?= htmlspecialchars($inq['description'], ENT_QUOTES, 'UTF-8') ?>
+                  </p>
+                  <div class="flex flex-wrap items-center justify-between gap-3 text-[11px] text-[#8890AA] pt-2 border-t border-[rgba(19,34,75,0.06)]">
+                    <div class="flex items-center gap-4">
+                      <span>Budget: <strong class="text-[#13224B]"><?= htmlspecialchars($inq['budget'], ENT_QUOTES, 'UTF-8') ?></strong></span>
+                      <span>Timeline: <strong class="text-[#13224B]"><?= htmlspecialchars($inq['timeline'], ENT_QUOTES, 'UTF-8') ?></strong></span>
+                    </div>
+                    <span>Submitted <?= time_ago($inq['created_at']) ?></span>
+                  </div>
+                </div>
+              <?php endforeach; ?>
             </div>
+          <?php endif; ?>
+
+          <!-- Active Projects List -->
+          <?php if (empty($projects)): ?>
+            <?php if (empty($pendingInquiries)): ?>
+              <div class="card p-12 text-center border border-[rgba(19,34,75,0.08)]">
+                <div class="w-16 h-16 rounded-2xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-3xl mx-auto mb-4">
+                  <iconify-icon icon="lucide:folder-plus"></iconify-icon>
+                </div>
+                <h4 class="text-base font-bold text-[#13224B]">No Active Projects Yet</h4>
+                <p class="text-xs text-[#8890AA] mt-1.5 max-w-md mx-auto leading-relaxed">
+                  Ready to elevate your digital product with expert UI/UX advisory? Submit your project requirements to start collaborating.
+                </p>
+                <a href="../inquiry.php"
+                   class="inline-flex items-center gap-2 mt-5 px-6 py-3 rounded-full text-xs font-bold text-white shadow-md hover:opacity-90 transition-all"
+                   style="background: linear-gradient(135deg, #4C6CCB, #6C5BB5);">
+                  <iconify-icon icon="lucide:plus"></iconify-icon>
+                  <span>Start a Project</span>
+                </a>
+              </div>
+            <?php endif; ?>
           <?php else: ?>
             <div class="space-y-4">
               <?php foreach ($projects as $p): ?>
@@ -296,12 +440,12 @@ try {
           <?php endif; ?>
         </div>
 
-        <!-- Recent Activity Panel -->
-        <div class="space-y-5" id="messages">
+        <!-- Recent Activity Feed (Right Column) -->
+        <div class="space-y-5">
           <div class="flex items-center justify-between">
             <div>
               <h3 class="text-lg font-bold text-[#13224B]">Recent Activity</h3>
-              <p class="text-xs text-[#8890AA] mt-0.5">Latest updates across your design projects.</p>
+              <p class="text-xs text-[#8890AA] mt-0.5">Latest updates across your workspaces.</p>
             </div>
           </div>
 
@@ -333,6 +477,225 @@ try {
           </div>
         </div>
 
+      </div>
+
+      <!-- ── Messages Section (#messages) ─────────────────────────────────── -->
+      <div class="space-y-5 pt-4" id="messages">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-bold text-[#13224B]">Studio Messages</h3>
+            <p class="text-xs text-[#8890AA] mt-0.5">Real-time collaboration and feedback from your Antigo design team.</p>
+          </div>
+        </div>
+
+        <div class="card p-6 border border-[rgba(19,34,75,0.08)]">
+          <?php if (empty($clientMessages)): ?>
+            <div class="py-10 text-center">
+              <div class="w-12 h-12 rounded-xl bg-purple-50 text-[#6C5BB5] flex items-center justify-center text-2xl mx-auto mb-3">
+                <iconify-icon icon="lucide:message-square"></iconify-icon>
+              </div>
+              <h4 class="text-sm font-bold text-[#13224B]">No messages yet</h4>
+              <p class="text-xs text-[#8890AA] mt-1">Open an active project workspace to send a message to your lead designer.</p>
+            </div>
+          <?php else: ?>
+            <div class="divide-y divide-[rgba(19,34,75,0.06)]">
+              <?php foreach ($clientMessages as $msg): ?>
+                <div class="py-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4 first:pt-0 last:pb-0">
+                  <div class="flex items-start gap-3">
+                    <div class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 <?= $msg['role'] === 'designer' ? 'bg-[#13224B] text-white' : 'bg-[#DDEBFF] text-[#4C6CCB]' ?>">
+                      <?= strtoupper(substr($msg['sender'], 0, 2)) ?>
+                    </div>
+                    <div>
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xs font-bold text-[#13224B]"><?= htmlspecialchars($msg['sender'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-semibold <?= $msg['role'] === 'designer' ? 'bg-purple-100 text-[#6C5BB5]' : 'bg-blue-50 text-[#4C6CCB]' ?>">
+                          <?= $msg['role'] === 'designer' ? 'Studio Lead' : 'You' ?>
+                        </span>
+                        <span class="text-[11px] text-[#8890AA]"><?= time_ago($msg['created_at']) ?></span>
+                      </div>
+                      <p class="text-xs text-[#4b4b4b] leading-relaxed max-w-2xl">
+                        <?= nl2br(htmlspecialchars($msg['message'], ENT_QUOTES, 'UTF-8')) ?>
+                      </p>
+                      <span class="inline-block mt-1.5 text-[11px] text-[#8890AA] font-mono">
+                        Project: <?= htmlspecialchars($msg['project_code'] . ' — ' . $msg['project_title'], ENT_QUOTES, 'UTF-8') ?>
+                      </span>
+                    </div>
+                  </div>
+                  <a href="project-detail.php?id=<?= (int)$msg['project_id'] ?>#messages"
+                     class="text-xs font-bold text-[#4C6CCB] hover:text-[#6C5BB5] flex items-center gap-1 flex-shrink-0 self-start sm:self-auto">
+                    <span>Reply in Project</span>
+                    <iconify-icon icon="lucide:arrow-right"></iconify-icon>
+                  </a>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <!-- ── Files Section (#files) ───────────────────────────────────────── -->
+      <div class="space-y-5 pt-4" id="files">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-bold text-[#13224B]">Deliverables &amp; Files</h3>
+            <p class="text-xs text-[#8890AA] mt-0.5">Secure client deliverables, specs, Figma files, and research audits.</p>
+          </div>
+        </div>
+
+        <div class="card border border-[rgba(19,34,75,0.08)] overflow-hidden">
+          <?php if (empty($clientFiles)): ?>
+            <div class="p-10 text-center">
+              <div class="w-12 h-12 rounded-xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-2xl mx-auto mb-3">
+                <iconify-icon icon="lucide:file-text"></iconify-icon>
+              </div>
+              <h4 class="text-sm font-bold text-[#13224B]">No deliverables shared yet</h4>
+              <p class="text-xs text-[#8890AA] mt-1">Design assets and specification documents uploaded by Kimberly will appear here.</p>
+            </div>
+          <?php else: ?>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-[rgba(19,34,75,0.08)] text-[#8890AA] uppercase tracking-wider font-bold bg-[#F4F6F8]/50">
+                    <th class="py-3.5 px-6">File Name</th>
+                    <th class="py-3.5 px-4">Associated Project</th>
+                    <th class="py-3.5 px-4">File Size</th>
+                    <th class="py-3.5 px-4">Uploaded</th>
+                    <th class="py-3.5 px-6 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[rgba(19,34,75,0.06)]">
+                  <?php foreach ($clientFiles as $file): ?>
+                    <tr class="hover:bg-[#F4F6F8]/40 transition-colors">
+                      <td class="py-4 px-6 font-bold text-[#13224B]">
+                        <div class="flex items-center gap-2.5">
+                          <iconify-icon icon="lucide:file" class="text-base text-[#4C6CCB]"></iconify-icon>
+                          <span><?= htmlspecialchars($file['name'], ENT_QUOTES, 'UTF-8') ?></span>
+                        </div>
+                      </td>
+                      <td class="py-4 px-4 text-[#6C5BB5] font-semibold">
+                        <?= htmlspecialchars($file['project_code'] . ' · ' . $file['project_title'], ENT_QUOTES, 'UTF-8') ?>
+                      </td>
+                      <td class="py-4 px-4 text-[#8890AA] font-mono text-[11px]">
+                        <?= htmlspecialchars($file['size'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                      </td>
+                      <td class="py-4 px-4 text-[#8890AA]">
+                        <?= time_ago($file['uploaded_at']) ?>
+                      </td>
+                      <td class="py-4 px-6 text-right">
+                        <a href="../download.php?file_id=<?= (int)$file['id'] ?>"
+                           class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-[#4C6CCB] bg-[#DDEBFF] hover:bg-[#4C6CCB] hover:text-white transition-all shadow-sm">
+                          <iconify-icon icon="lucide:download"></iconify-icon>
+                          <span>Download</span>
+                        </a>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <!-- ── Settings Section (#settings) ─────────────────────────────────── -->
+      <div class="space-y-5 pt-4" id="settings">
+        <div>
+          <h3 class="text-lg font-bold text-[#13224B]">Account Settings</h3>
+          <p class="text-xs text-[#8890AA] mt-0.5">Manage your client profile details and security credentials.</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          <!-- Profile Information Form -->
+          <div class="card p-6 sm:p-8 border border-[rgba(19,34,75,0.08)]">
+            <div class="flex items-center gap-3 mb-6">
+              <div class="w-10 h-10 rounded-xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-lg">
+                <iconify-icon icon="lucide:user-check"></iconify-icon>
+              </div>
+              <div>
+                <h4 class="text-sm font-bold text-[#13224B]">Profile Information</h4>
+                <p class="text-[11px] text-[#8890AA]">Update your contact name and company details.</p>
+              </div>
+            </div>
+
+            <form method="POST" action="dashboard.php" class="space-y-4">
+              <input type="hidden" name="action" value="update_profile">
+
+              <div>
+                <label for="prof_name" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-1.5">Full Name</label>
+                <input type="text" id="prof_name" name="name" required
+                       value="<?= htmlspecialchars($currentUserProfile['name'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                       class="w-full px-4 py-2.5 rounded-xl border border-[rgba(19,34,75,0.12)] text-xs font-semibold text-[#13224B] focus:outline-none focus:border-[#4C6CCB]">
+              </div>
+
+              <div>
+                <label for="prof_email" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-1.5">Email Address</label>
+                <input type="email" id="prof_email" disabled
+                       value="<?= htmlspecialchars($currentUserProfile['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                       class="w-full px-4 py-2.5 rounded-xl border border-[rgba(19,34,75,0.08)] bg-gray-100 text-xs font-semibold text-gray-500 cursor-not-allowed">
+                <p class="text-[10px] text-[#8890AA] mt-1">Contact studio support if you need to transfer this account to a new email.</p>
+              </div>
+
+              <div>
+                <label for="prof_company" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-1.5">Company / Organization</label>
+                <input type="text" id="prof_company" name="company"
+                       value="<?= htmlspecialchars($currentUserProfile['company'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                       class="w-full px-4 py-2.5 rounded-xl border border-[rgba(19,34,75,0.12)] text-xs font-semibold text-[#13224B] focus:outline-none focus:border-[#4C6CCB]">
+              </div>
+
+              <div class="pt-2">
+                <button type="submit"
+                        class="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md hover:opacity-95 transition-all"
+                        style="background: linear-gradient(135deg, #4C6CCB, #6C5BB5);">
+                  Save Profile Changes
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Change Password Form -->
+          <div class="card p-6 sm:p-8 border border-[rgba(19,34,75,0.08)]">
+            <div class="flex items-center gap-3 mb-6">
+              <div class="w-10 h-10 rounded-xl bg-purple-50 text-[#6C5BB5] flex items-center justify-center text-lg">
+                <iconify-icon icon="lucide:lock"></iconify-icon>
+              </div>
+              <div>
+                <h4 class="text-sm font-bold text-[#13224B]">Change Password</h4>
+                <p class="text-[11px] text-[#8890AA]">Ensure your client portal account remains securely protected.</p>
+              </div>
+            </div>
+
+            <form method="POST" action="dashboard.php" class="space-y-4">
+              <input type="hidden" name="action" value="change_password">
+
+              <div>
+                <label for="cur_pass" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-1.5">Current Password</label>
+                <input type="password" id="cur_pass" name="current_password" required placeholder="••••••••"
+                       class="w-full px-4 py-2.5 rounded-xl border border-[rgba(19,34,75,0.12)] text-xs font-semibold text-[#13224B] focus:outline-none focus:border-[#4C6CCB]">
+              </div>
+
+              <div>
+                <label for="new_pass" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-1.5">New Password</label>
+                <input type="password" id="new_pass" name="new_password" required minlength="6" placeholder="At least 6 characters"
+                       class="w-full px-4 py-2.5 rounded-xl border border-[rgba(19,34,75,0.12)] text-xs font-semibold text-[#13224B] focus:outline-none focus:border-[#4C6CCB]">
+              </div>
+
+              <div>
+                <label for="conf_pass" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-1.5">Confirm New Password</label>
+                <input type="password" id="conf_pass" name="confirm_password" required minlength="6" placeholder="Repeat new password"
+                       class="w-full px-4 py-2.5 rounded-xl border border-[rgba(19,34,75,0.12)] text-xs font-semibold text-[#13224B] focus:outline-none focus:border-[#4C6CCB]">
+              </div>
+
+              <div class="pt-2">
+                <button type="submit"
+                        class="px-5 py-2.5 rounded-xl text-xs font-bold text-[#13224B] bg-white border border-[rgba(19,34,75,0.15)] shadow-sm hover:bg-[#F4F6F8] transition-all">
+                  Update Password
+                </button>
+              </div>
+            </form>
+          </div>
+
+        </div>
       </div>
 
     </main>

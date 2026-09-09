@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once __DIR__ . '/includes/routing.php';
 ?>
 
 <!DOCTYPE html>
@@ -37,12 +37,8 @@ session_start();
         <svg class="moon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>
         <svg class="sun" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
       </button>
-      <?php if (isset($_SESSION['user_id'])): ?>
-        <?php if ($_SESSION['role'] === 'admin'): ?>
-          <a href="admin-dashboard.php" class="btn btn-outline btn-sm">Admin Dashboard</a>
-        <?php else: ?>
-          <a href="client-dashboard.php" class="btn btn-outline btn-sm">Login</a>
-        <?php endif; ?>
+      <?php if (is_logged_in()): ?>
+        <a href="<?= home_url() ?>" class="btn btn-outline btn-sm"><?= ($_SESSION['role'] ?? '') === 'admin' ? 'Admin Dashboard' : 'Client Dashboard' ?></a>
         <a href="logout.php" class="btn btn-outline btn-sm">Log Out</a>
       <?php else: ?>
         <a href="login.php" class="btn btn-outline btn-sm">Login</a>

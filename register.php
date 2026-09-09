@@ -1,9 +1,9 @@
 <?php
-session_start();
+require_once __DIR__ . '/includes/routing.php';
 
 // Already authenticated
-if (isset($_SESSION['user_id'])) {
-    header('Location: ' . ($_SESSION['role'] === 'admin' ? 'admin-dashboard.php' : 'client-dashboard.php'));
+if (is_logged_in()) {
+    header('Location: ' . home_url());
     exit;
 }
 

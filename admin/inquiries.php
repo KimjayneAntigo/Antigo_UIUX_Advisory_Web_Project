@@ -72,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $clientDisplayName = !empty($inq['company']) ? $inq['company'] : $inq['name'];
             $serviceName       = !empty($inq['service']) ? $inq['service'] : 'UI/UX Design';
+            $projectTitle      = $clientDisplayName . ' – ' . $serviceName;
             $budgetVal         = !empty($inq['budget']) ? $inq['budget'] : '$150,000 – $300,000';
             $budgetVal         = str_replace('₱', '$', $budgetVal);
             $dueDate           = date('Y-m-d', strtotime('+30 days'));

@@ -1,13 +1,9 @@
 <?php
-session_start();
+require_once __DIR__ . '/includes/routing.php';
 
 // If already logged in, redirect to the appropriate dashboard.
-if (isset($_SESSION['user_id'])) {
-    if ($_SESSION['role'] === 'admin') {
-        header('Location: admin-dashboard.php');
-    } else {
-        header('Location: client/dashboard.php');
-    }
+if (is_logged_in()) {
+    header('Location: ' . home_url());
     exit;
 }
 
@@ -42,11 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['email']     = $user['email'];
             $_SESSION['role']      = $user['role'];
 
-            if ($user['role'] === 'admin') {
-                header('Location: admin-dashboard.php');
-            } else {
-                header('Location: client/dashboard.php');
-            }
+            header('Location: ' . home_url());
             exit;
         }
     }
@@ -173,7 +165,7 @@ $flash = $_GET['msg'] ?? '';
                     <div class="sub">UI/UX ADVISORY</div>
                 </div>
             </a>
-            <a href="home.php" class="text-xs sm:text-sm font-semibold text-[#4b4b4b] hover:text-[#4C6CCB] transition-colors flex items-center gap-1.5">
+            <a href="<?= home_url() ?>" class="text-xs sm:text-sm font-semibold text-[#4b4b4b] hover:text-[#4C6CCB] transition-colors flex items-center gap-1.5">
                 <iconify-icon icon="lucide:arrow-left"></iconify-icon>
                 <span>Back to Home</span>
             </a>

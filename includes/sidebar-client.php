@@ -17,7 +17,7 @@ $navItems = [
     ['My Projects', 'lucide:folder-kanban',    $base . 'client/dashboard.php#projects', 'projects'],
     ['Messages',    'lucide:message-circle',   $base . 'client/dashboard.php#messages', 'messages'],
     ['Files',       'lucide:file-archive',     $base . 'client/dashboard.php#files',    'files'],
-    ['Settings',    'lucide:settings-2',       '#',                             'settings'],
+    ['Settings',    'lucide:settings-2',       $base . 'client/dashboard.php#settings', 'settings'],
 ];
 ?>
 <aside class="sidebar">

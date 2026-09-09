@@ -1,7 +1,5 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/includes/routing.php';
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/includes/functions.php';
 
@@ -9,8 +7,9 @@ $prefill_name    = '';
 $prefill_email   = '';
 $prefill_company = '';
 $prefill_phone   = '';
+$is_client_user  = is_logged_in();
 
-if (isset($_SESSION['user_id'])) {
+if ($is_client_user) {
     $prefill_name  = $_SESSION['user_name'] ?? $_SESSION['name'] ?? '';
     $prefill_email = $_SESSION['email'] ?? '';
     try {
@@ -18,8 +17,8 @@ if (isset($_SESSION['user_id'])) {
         $uStmt->execute([(int)$_SESSION['user_id']]);
         $userRow = $uStmt->fetch();
         if ($userRow) {
-            $prefill_name    = $userRow['name'] ?? $prefill_name;
-            $prefill_email   = $userRow['email'] ?? $prefill_email;
+            $prefill_name    = $userRow['name'] ?: $prefill_name;
+            $prefill_email   = $userRow['email'] ?: $prefill_email;
             $prefill_company = $userRow['company'] ?? '';
         }
     } catch (\PDOException $e) {
@@ -208,7 +207,7 @@ if (isset($_SESSION['user_id'])) {
             </a>
 
             <div class="flex items-center gap-6">
-                <a href="home.php" class="flex items-center gap-2 text-sm text-[#4b4b4b] hover:text-[#4C6CCB] transition-colors font-medium">
+                <a href="<?= home_url() ?>" class="flex items-center gap-2 text-sm text-[#4b4b4b] hover:text-[#4C6CCB] transition-colors font-medium">
                     <iconify-icon icon="lucide:arrow-left"></iconify-icon>
                     <span>Back to Home</span>
                 </a>
@@ -242,14 +241,16 @@ if (isset($_SESSION['user_id'])) {
                             <label for="fullName" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Full Name *</label>
                             <input type="text" id="fullName" required placeholder="e.g. Maria Santos"
                                    value="<?= htmlspecialchars($prefill_name, ENT_QUOTES, 'UTF-8') ?>"
-                                   class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium">
+                                   <?= $is_client_user ? 'readonly' : '' ?>
+                                   class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium <?= $is_client_user ? 'bg-gray-100 cursor-not-allowed opacity-90' : '' ?>">
                             <p id="err-name" class="text-xs text-red-500 mt-1.5 font-medium hidden"></p>
                         </div>
                         <div>
                             <label for="email" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Email Address *</label>
                             <input type="email" id="email" required placeholder="maria@company.com"
                                    value="<?= htmlspecialchars($prefill_email, ENT_QUOTES, 'UTF-8') ?>"
-                                   class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium">
+                                   <?= $is_client_user ? 'readonly' : '' ?>
+                                   class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium <?= $is_client_user ? 'bg-gray-100 cursor-not-allowed opacity-90' : '' ?>">
                             <p id="err-email" class="text-xs text-red-500 mt-1.5 font-medium hidden"></p>
                         </div>
                         <div>
@@ -390,18 +391,20 @@ if (isset($_SESSION['user_id'])) {
                     <span>Book a Consultation</span>
                     <iconify-icon icon="lucide:arrow-right"></iconify-icon>
                 </button>
-                <a href="home.php" class="px-6 py-3.5 rounded-full font-bold uppercase text-xs tracking-wider border border-[rgba(19,34,75,0.12)] text-[#4b4b4b] hover:bg-[#F4F6F8] transition-colors">
+                <a href="<?= home_url() ?>" class="px-6 py-3.5 rounded-full font-bold uppercase text-xs tracking-wider border border-[rgba(19,34,75,0.12)] text-[#4b4b4b] hover:bg-[#F4F6F8] transition-colors">
                     Back to Home
                 </a>
             </div>
 
-            <!-- Trusted-session registration CTA -->
+            <?php if (!is_logged_in()): ?>
+            <!-- Trusted-session registration CTA (guests only) -->
             <div class="mt-5 pt-4 border-t border-[rgba(19,34,75,0.08)]">
                 <a href="register.php" class="flex items-center justify-center gap-2 text-xs font-semibold text-[#6C5BB5] hover:underline">
                     <iconify-icon icon="lucide:user-plus"></iconify-icon>
                     Create an account to track this inquiry in your dashboard →
                 </a>
             </div>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -496,8 +499,20 @@ if (isset($_SESSION['user_id'])) {
             }
 
             try {
-                const res  = await fetch('inquiry-handler.php', { method: 'POST', body });
-                const data = await res.json();
+                const res = await fetch('inquiry-handler.php', {
+                    method: 'POST',
+                    body,
+                    credentials: 'same-origin'
+                });
+
+                const rawText = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (parseError) {
+                    console.error('inquiry-handler returned non-JSON response:', rawText);
+                    throw new Error('Server returned an unexpected response format.');
+                }
 
                 if (!res.ok || !data.success) {
                     if (data.field_errors) {
@@ -512,7 +527,13 @@ if (isset($_SESSION['user_id'])) {
                     return;
                 }
 
-                // Keep raw numeric ID and submitted data for the booking handoff
+                // If submitter is a logged-in client, skip modal and redirect straight to dashboard
+                if (data.is_logged_in) {
+                    window.location.href = data.redirect || 'client-dashboard.php';
+                    return;
+                }
+
+                // Guest submitter: Keep raw numeric ID and submitted data for the booking handoff
                 createdInquiryId = data.raw_id;
                 submittedData    = data;
 
@@ -524,7 +545,8 @@ if (isset($_SESSION['user_id'])) {
                 document.getElementById('successModal').classList.remove('hidden');
 
             } catch (err) {
-                alert('A network error occurred. Please check your connection and try again.');
+                console.error('Inquiry submission caught error:', err);
+                alert(err.message || 'A network error occurred. Please check your connection and try again.');
                 submitBtn.disabled = false;
                 submitBtn.querySelector('span').innerText = 'Submit Project Inquiry';
             }

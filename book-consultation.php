@@ -1,6 +1,11 @@
 <?php
+require_once __DIR__ . '/includes/routing.php';
+require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/includes/functions.php';
 
-require_once 'book-consultation.php';
+$is_client_user = is_logged_in();
+$session_name   = $_SESSION['user_name'] ?? $_SESSION['name'] ?? '';
+$session_email  = $_SESSION['email'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -271,7 +276,7 @@ require_once 'book-consultation.php';
                     <iconify-icon icon="lucide:user-check" class="text-[#4C6CCB]"></iconify-icon>
                     <span id="leadBadgeText">Maria Santos (Pesolink)</span>
                 </div>
-                <a href="home.php" class="flex items-center gap-2 text-sm text-[#4b4b4b] hover:text-[#4C6CCB] transition-colors font-medium">
+                <a href="<?= home_url() ?>" class="flex items-center gap-2 text-sm text-[#4b4b4b] hover:text-[#4C6CCB] transition-colors font-medium">
                     <iconify-icon icon="lucide:arrow-left"></iconify-icon>
                     <span>Back to Home</span>
                 </a>
@@ -733,11 +738,15 @@ require_once 'book-consultation.php';
                 <div class="flex justify-between"><span class="text-[#8890AA]">Service:</span> <strong id="modalServiceName" class="text-[#13224B]">UI Design</strong></div>
                 <div class="flex justify-between"><span class="text-[#8890AA]">Date &amp; Time:</span> <strong id="modalDateTime" class="text-[#13224B]">Sep 10, 2026 · 10:00 AM</strong></div>
             </div>
+            <?php if ($is_client_user): ?>
             <div class="flex flex-col gap-2.5">
-                <a href="client-dashboard.php" class="btn-brand-primary py-3 rounded-full font-bold uppercase text-xs tracking-wider">
-                    Go to Client Dashboard
+                <a href="client-dashboard.php" class="btn-brand-primary py-3.5 rounded-full font-bold uppercase text-xs tracking-wider">
+                    View in Dashboard
                 </a>
-                <a href="home.php" class="py-3 rounded-full font-bold uppercase text-xs tracking-wider border border-[rgba(19,34,75,0.12)] text-[#4b4b4b] hover:bg-[#F4F6F8]">
+            </div>
+            <?php else: ?>
+            <div class="flex flex-col gap-2.5">
+                <a href="<?= home_url() ?>" class="py-3 rounded-full font-bold uppercase text-xs tracking-wider border border-[rgba(19,34,75,0.12)] text-[#4b4b4b] hover:bg-[#F4F6F8]">
                     Back to Home
                 </a>
             </div>
@@ -749,6 +758,7 @@ require_once 'book-consultation.php';
                     Create an account to track this booking in your dashboard →
                 </a>
             </div>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -782,23 +792,36 @@ require_once 'book-consultation.php';
             format: 'Video Call (Google Meet)'
         };
 
-        // Initialize from URL / LocalStorage
+        // Initialize from URL / Session / LocalStorage
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const inquiryId = urlParams.get('inquiry_id');
+            const isClientLoggedIn = <?= json_encode($is_client_user) ?>;
+            const sessionClientName = <?= json_encode($session_name) ?>;
+            const sessionClientEmail = <?= json_encode($session_email) ?>;
             
             if (inquiryId) {
+                const urlName = urlParams.get('name');
+                const urlEmail = urlParams.get('email');
+                const urlService = urlParams.get('service');
+                bookingState.inquiryId = inquiryId;
+                if (urlName) bookingState.clientName = urlName;
+                if (urlEmail) bookingState.clientEmail = urlEmail;
+                if (urlService) bookingState.service = urlService;
+
                 const inq = AntigoData.getInquiry(inquiryId);
                 if (inq) {
-                    bookingState.inquiryId = inq.id;
-                    bookingState.clientName = inq.name;
-                    bookingState.clientEmail = inq.email;
-                    if (inq.projectType) {
-                        bookingState.service = inq.projectType;
-                    }
-                    document.getElementById('leadBadgeText').innerText = `${inq.name} (${inq.company || 'Inquiry'})`;
-                    document.getElementById('leadBadge').classList.remove('hidden');
+                    if (!urlName) bookingState.clientName = inq.name;
+                    if (!urlEmail) bookingState.clientEmail = inq.email;
+                    if (!urlService && inq.projectType) bookingState.service = inq.projectType;
                 }
+                document.getElementById('leadBadgeText').innerText = `${bookingState.clientName} (Inquiry)`;
+                document.getElementById('leadBadge').classList.remove('hidden');
+            } else if (isClientLoggedIn) {
+                bookingState.clientName = sessionClientName;
+                bookingState.clientEmail = sessionClientEmail;
+                document.getElementById('leadBadgeText').innerText = `${sessionClientName} (Client)`;
+                document.getElementById('leadBadge').classList.remove('hidden');
             } else {
                 // Check if client is logged in
                 const user = AntigoData.getCurrentUser();
@@ -971,8 +994,20 @@ require_once 'book-consultation.php';
             if (bookingState.inquiryId) body.append('inquiry_id', bookingState.inquiryId);
 
             try {
-                const res  = await fetch('booking-handler.php', { method: 'POST', body });
-                const data = await res.json();
+                const res = await fetch('booking-handler.php', {
+                    method: 'POST',
+                    body,
+                    credentials: 'same-origin'
+                });
+
+                const rawText = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (parseError) {
+                    console.error('booking-handler non-JSON response:', rawText);
+                    throw new Error('Server returned an unexpected response format.');
+                }
 
                 if (!res.ok || !data.success) {
                     alert(data.error || 'Booking failed. Please try again.');

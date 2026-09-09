@@ -4,7 +4,7 @@
  * Accepts POST only always returns JSON.
  */
 
-session_start();
+require_once __DIR__ . '/includes/routing.php';
 require_once __DIR__ . '/config/db.php';
 
 header('Content-Type: application/json');
@@ -29,6 +29,7 @@ $allowed_durations = [30, 60];     // accepted as integers from POST
 $allowed_formats   = [
     'Video Call (Google Meet)',
     'Zoom Meet (Zoom)',
+    'Phone Call (+63)',
     'In-Person Studio (Cebu City)',
 ];
 $allowed_times     = [
@@ -196,14 +197,16 @@ if (!$user_id) {
 
 //  Success response 
 echo json_encode([
-    'success'    => true,
-    'booking_id' => $bookingCode,
-    'raw_id'     => $newId,
-    'service'    => $service,
-    'date'       => $bookingDate->format('M j, Y'),
-    'time'       => $time_raw,
-    'price'      => $priceFormatted,
-    'format'     => $format,
+    'success'      => true,
+    'is_logged_in' => (bool)$user_id,
+    'redirect'     => $user_id ? 'client-dashboard.php' : null,
+    'booking_id'   => $bookingCode,
+    'raw_id'       => $newId,
+    'service'      => $service,
+    'date'         => $bookingDate->format('M j, Y'),
+    'time'         => $time_raw,
+    'price'        => $priceFormatted,
+    'format'       => $format,
 ]);
 exit;
 

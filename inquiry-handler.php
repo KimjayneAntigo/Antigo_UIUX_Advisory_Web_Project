@@ -1,7 +1,8 @@
 <?php
 /**
+ * inquiry-handler.php
  * Inquiry form submission handler.
- * Accepts POST (AJAX or direct form); validates in exact prompt order and returns JSON.
+ * Accepts POST (AJAX or direct form); validates and returns JSON.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -10,6 +11,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/includes/routing.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -20,48 +22,109 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// INPUT COLLECTION & SANITISATION 
+// Input collection
 $name        = trim($_POST['name']        ?? '');
 $email       = trim($_POST['email']       ?? '');
+$phone       = trim($_POST['phone']       ?? '');
 $company     = trim($_POST['company']     ?? '');
 $projectType = trim($_POST['projectType'] ?? '');
 $budget      = trim($_POST['budget']      ?? '');
 $timeline    = trim($_POST['timeline']    ?? '');
 $description = trim($_POST['description'] ?? '');
-$fileName    = trim($_POST['fileName']    ?? '');   // client-provided filename only (no upload stored here)
+
+// If user is authenticated as client, lock identity to session values
+$user_id = is_logged_in() ? (int)$_SESSION['user_id'] : null;
+if ($user_id) {
+    if (!empty($_SESSION['user_name'])) {
+        $name = $_SESSION['user_name'];
+    }
+    if (!empty($_SESSION['email'])) {
+        $email = $_SESSION['email'];
+    }
+}
 
 // Allowed values for enum-style fields
-$allowed_services = ['UI Design','UX Research','Wireframing','Interactive Prototyping','Responsive Web Design','Design Systems'];
-$allowed_budgets  = ['Under ₱50,000','₱50,000 – ₱150,000','₱150,000 – ₱300,000','₱300,000+'];
-$allowed_timelines= ['Urgent (< 2 weeks)','1 Month','2–3 Months','Flexible'];
+$allowed_services = [
+    'UI Design',
+    'UX Research',
+    'Wireframing',
+    'Interactive Prototyping',
+    'Responsive Web Design',
+    'Design Systems',
+];
 
-// VALIDATION
-$errors = [];
+$allowed_budgets = [
+    'Under ₱50,000',
+    '₱50,000 – ₱150,000',
+    '₱150,000 – ₱300,000',
+    '₱300,000+',
+    'Under $50,000',
+    '$50,000 – $150,000',
+    '$150,000 – $300,000',
+    '$300,000+',
+];
 
-if (empty($name))                                           $errors[] = 'Full name is required.';
-if (!filter_var($email, FILTER_VALIDATE_EMAIL))             $errors[] = 'A valid email address is required.';
-if (!in_array($projectType, $allowed_services, true))       $errors[] = 'Please select a valid primary service.';
-if (!in_array($budget, $allowed_budgets, true))             $errors[] = 'Please select a valid budget range.';
-if (!in_array($timeline, $allowed_timelines, true))         $errors[] = 'Please select a valid timeline.';
-if (strlen($description) < 20)                              $errors[] = 'Project description must be at least 20 characters.';
+$allowed_timelines = [
+    'Urgent (< 2 weeks)',
+    '1 Month',
+    '2–3 Months',
+    'Flexible',
+];
 
-if (!empty($errors)) {
+// Validation
+$field_errors = [];
+
+if (empty($name)) {
+    $field_errors['name'] = 'Full name is required.';
+}
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    $field_errors['email'] = 'A valid email address is required.';
+}
+if (empty($phone)) {
+    $field_errors['phone'] = 'Phone number is required.';
+}
+if (!in_array($projectType, $allowed_services, true)) {
+    $field_errors['projectType'] = 'Please select a valid primary service.';
+}
+if (!in_array($budget, $allowed_budgets, true)) {
+    $field_errors['budget'] = 'Please select a valid budget range.';
+}
+if (!in_array($timeline, $allowed_timelines, true)) {
+    $field_errors['timeline'] = 'Please select a valid timeline.';
+}
+if (mb_strlen($description) < 20) {
+    $field_errors['description'] = 'Project description must be at least 20 characters.';
+}
+
+if (!empty($field_errors)) {
     http_response_code(422);
     echo json_encode([
         'success'      => false,
         'field_errors' => $field_errors,
-        'error'        => reset($field_errors), // error message for alert fallback
+        'error'        => reset($field_errors),
     ]);
     exit;
 }
 
-// Save validated file to storage 
-if (!empty($_FILES['file']['name']) && empty($field_errors)) {
+// File upload handling (optional)
+$storedFileName = null;
+if (!empty($_FILES['file']['name'])) {
     $file      = $_FILES['file'];
     $origName  = basename($file['name']);
     $ext       = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-    $uploadDir = __DIR__ . '/uploads/inquiries/';
+    $allowed_exts = ['pdf', 'doc', 'docx', 'zip', 'fig', 'png', 'jpg', 'jpeg'];
 
+    if (!in_array($ext, $allowed_exts, true)) {
+        http_response_code(422);
+        echo json_encode([
+            'success'      => false,
+            'field_errors' => ['file' => 'Invalid file format. Allowed: PDF, DOC, DOCX, ZIP, FIG, PNG, JPG.'],
+            'error'        => 'Invalid file format.',
+        ]);
+        exit;
+    }
+
+    $uploadDir = __DIR__ . '/uploads/inquiries/';
     if (!is_dir($uploadDir)) {
         mkdir($uploadDir, 0755, true);
     }
@@ -78,21 +141,16 @@ if (!empty($_FILES['file']['name']) && empty($field_errors)) {
     }
 }
 
-//Sanitize every text field before insert
-$name        = sanitize_input($raw_name);
-$email       = sanitize_input($raw_email);
-$phone       = sanitize_input($raw_phone);
-$company     = sanitize_input($raw_company);
-$projectType = sanitize_input($raw_projectType);
-$budget      = sanitize_input($raw_budget ?: '$50,000 – $150,000');
-$budget      = str_replace('₱', '$', $budget);
-$timeline    = sanitize_input($raw_timeline);
-$description = sanitize_input($raw_description);
+// Sanitization for storage
+$sanitizedName        = sanitize_input($name);
+$sanitizedEmail       = sanitize_input($email);
+$sanitizedPhone       = sanitize_input($phone);
+$sanitizedCompany     = sanitize_input($company);
+$sanitizedProjectType = sanitize_input($projectType);
+$sanitizedBudget      = str_replace('₱', '$', sanitize_input($budget));
+$sanitizedTimeline    = sanitize_input($timeline);
+$sanitizedDescription = sanitize_input($description);
 
-// Check if user is logged in
-$user_id = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
-
-// Database insert
 try {
     $pdo->beginTransaction();
 
@@ -106,36 +164,58 @@ try {
 
     $stmt->execute([
         $user_id,
-        $name,
-        $email,
-        $phone,
-        $company ?: null,
-        $projectType,
-        $budget,
-        $timeline,
-        $description,
+        $sanitizedName,
+        $sanitizedEmail,
+        $sanitizedPhone,
+        $sanitizedCompany ?: null,
+        $sanitizedProjectType,
+        $sanitizedBudget,
+        $sanitizedTimeline,
+        $sanitizedDescription,
         $storedFileName,
     ]);
 
-$new_inquiry_id = (int) $pdo->lastInsertId();
+    $new_inquiry_id = (int) $pdo->lastInsertId();
+    $ref_code       = 'INQ-' . str_pad((string)$new_inquiry_id, 4, '0', STR_PAD_LEFT);
 
-// STORE TRUSTED-SESSION
-//Store ONLY this record's ID in session — NOT the email.
-if (!$user_id) {
-    // Only store for guest submissions; logged-in clients are already linked
-    $_SESSION['pending_link_inquiry_id'] = $new_inquiry_id;
+    $updStmt = $pdo->prepare('UPDATE inquiries SET ref_code = ? WHERE id = ?');
+    $updStmt->execute([$ref_code, $new_inquiry_id]);
+
+    $pdo->commit();
+
+    // Session linking logic
+    if (!$user_id) {
+        // Guest submission: track in session for auto-linking upon registration
+        $_SESSION['pending_link_inquiry_id'] = $new_inquiry_id;
+    } else {
+        // Logged-in client: flash confirmation message
+        set_flash('success', 'Your project inquiry has been submitted! Our team will review it shortly.');
+    }
+
+    echo json_encode([
+        'success'       => true,
+        'is_logged_in'  => (bool)$user_id,
+        'redirect'      => $user_id ? 'client-dashboard.php' : null,
+        'inquiry_id'    => $ref_code,
+        'raw_id'        => $new_inquiry_id,
+        'name'          => $sanitizedName,
+        'email'         => $sanitizedEmail,
+        'phone'         => $sanitizedPhone,
+        'service'       => $sanitizedProjectType,
+        'budget'        => $sanitizedBudget,
+        'timeline'      => $sanitizedTimeline,
+    ]);
+    exit;
+
+} catch (Throwable $e) {
+    if ($pdo && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    error_log('inquiry-handler database exception: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'error'   => 'Database error processing your inquiry. Please try again.',
+    ]);
+    exit;
 }
-
-// SUCCESS RESPONSE
-echo json_encode([
-    'success'    => true,
-    'inquiry_id' => $refCode,
-    'raw_id'     => $newId,
-    'name'       => $name,
-    'email'      => $email,
-    'phone'      => $phone,
-    'service'    => $projectType,
-    'budget'     => $budget,
-    'timeline'   => $timeline,
-]);
-exit;

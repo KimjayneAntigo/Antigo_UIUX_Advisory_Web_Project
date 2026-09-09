@@ -4,6 +4,8 @@
  * Shared utility functions for the Antigo UI/UX Advisory Web App.
  */
 
+require_once __DIR__ . '/routing.php';
+
 /**
  * Trim and HTML-encode a string to prevent XSS.
  */

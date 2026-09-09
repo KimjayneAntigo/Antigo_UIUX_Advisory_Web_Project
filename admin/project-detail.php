@@ -16,13 +16,29 @@ const STAGE_MAP = [
     5 => ['phase_name' => 'Delivered',              'progress' => 100, 'status' => 'Delivered'],
 ];
 
-// Validate ?id param 
-$projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
-if ($projectId <= 0) {
-    http_response_code(404);
-    require_once __DIR__ . '/../404.php';
-    exit;
+// Validate ?id param (supports integer id or project_code like PRJ-3001)
+$rawId = trim($_GET['id'] ?? '');
+if ($rawId === '') {
+    set_flash('error', 'No project specified.');
+    safe_redirect('../admin-dashboard.php');
 }
+
+try {
+    $stmt = $pdo->prepare('SELECT * FROM projects WHERE id = ? OR project_code = ? LIMIT 1');
+    $stmt->execute([is_numeric($rawId) ? (int) $rawId : 0, $rawId]);
+    $project = $stmt->fetch();
+} catch (\PDOException $e) {
+    error_log('project-detail fetch project error: ' . $e->getMessage());
+    set_flash('error', 'Database error loading project.');
+    safe_redirect('../admin-dashboard.php');
+}
+
+if (!$project) {
+    set_flash('error', 'Project not found.');
+    safe_redirect('../admin-dashboard.php');
+}
+
+$projectId = (int) $project['id'];
 
 //  POST handlers
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -187,22 +203,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     safe_redirect("project-detail.php?id={$projectId}");
 }
 
-// Fetch project row
-try {
-    $stmt = $pdo->prepare('SELECT * FROM projects WHERE id = ? LIMIT 1');
-    $stmt->execute([$projectId]);
-    $project = $stmt->fetch();
-} catch (\PDOException $e) {
-    error_log('project-detail fetch project error: ' . $e->getMessage());
-    set_flash('error', 'Database error loading project.');
-    safe_redirect('../admin-dashboard.php');
-}
-
-if (!$project) {
-    http_response_code(404);
-    require_once __DIR__ . '/../404.php';
-    exit;
-}
 
 // Fetch related data 
 $files    = [];
