@@ -10,7 +10,7 @@ A modern, full-stack advisory platform and project management portal designed fo
 
 ---
 
-## ✨ Key Features
+## 🌟 Key Features
 
 ### 🌐 Public Portal & Digital Showcase
 - **Modern Landing Experience**: Hero portfolio, bespoke design advisory services (UI Design, UX Research, Design Systems, Mobile & Web Applications), pricing packages, and client testimonials.
@@ -49,13 +49,15 @@ A modern, full-stack advisory platform and project management portal designed fo
 ## 🔒 Security Architecture
 
 The application adopts defense-in-depth principles:
+- **CSRF Defense**: Cryptographic per-session CSRF tokens on all state-altering forms and AJAX endpoints (`inquiry`, `booking`, `login`, `register`, client profile/passwords, project files, and admin mutations).
 - **Prepared Statements (PDO)**: Complete protection against SQL injection across all authentication, project, inquiry, and booking queries.
 - **Role-Based Access Control (RBAC)**: Distinct authorization barriers separating guest users, verified clients, and administrators (`auth-check-admin.php` and `auth-check-client.php`).
 - **IDOR Protection**: All client queries (`client/dashboard.php`, `client/project-detail.php`, and `download.php`) enforce ownership validation (`WHERE project_owner_id = session.user_id`).
-- **Hardened File Streaming**: Files are served through `download.php` using mime-type detection, path resolution checks, and directory traversal mitigations rather than direct public file exposure.
-- **Session Hardening**: Protection against session fixation attacks using `session_regenerate_id(true)` upon successful authentication.
-- **XSS Sanitization**: Input normalization and HTML entity sanitization (`htmlspecialchars(..., ENT_QUOTES, 'UTF-8')`) across all user-rendered fields.
-- **Server Guard (`.htaccess`)**: Blocks public access to configuration files, database scripts (`.sql`), environment configurations, and disables directory indexes.
+- **Hardened File Uploads & Streaming**: Uploaded briefs and deliverables are validated with strict MIME inspection via `finfo_file` (not merely trusting file extensions). Files are served through `download.php` using mime-type detection, path resolution checks, and directory traversal mitigations. Furthermore, `uploads/.htaccess` disables script execution within upload directories.
+- **Cookie & Session Hardening**: Protection against session fixation attacks using `session_regenerate_id(true)` upon successful authentication, with `HttpOnly`, `SameSite=Lax`, and secure cookie parameters.
+- **XSS Sanitization**: Input normalization and HTML entity sanitization (`htmlspecialchars(..., ENT_QUOTES, 'UTF-8')`) across all user-rendered fields with zero double-encoding bugs.
+- **Server Guard (`.htaccess`)**: Blocks public access to configuration files (`config/.htaccess`), database scripts (`.sql`), environment configurations, and disables directory indexes.
+- **Graceful Error Recovery**: Custom branded `404.php` and `500.php` pages; database connection drops gracefully redirect or yield JSON responses without leaking internal stack traces.
 
 ---
 
@@ -85,40 +87,44 @@ Antigo_WebApp/
 │   ├── project-detail.php     # Client project tracking & messaging
 │   └── download.php           # Client file download proxy
 ├── config/                    # System configuration & database files
-│   ├── antigo_advisory_db.sql # Full database schema and sample seed data
-│   ├── schema-migration.sql   # Relational migration script
+│   ├── .htaccess              # Protects config directory from direct HTTP access
+│   ├── antigo_advisory_db.sql # Full consolidated schema & seed dataset (Single-file import)
+│   ├── schema-migration.sql   # Incremental relational migration script (for legacy databases)
 │   ├── db.example.php         # Database configuration template
 │   ├── db.php                 # Active database connection (Git-ignored)
-│   └── session.php            # Session initiator
+│   └── session.php            # Hardened session initiator
 ├── css/                       # Stylesheets
 │   └── style.css              # Custom styling, animations, light/dark themes
 ├── images/                    # Branding assets, logos, profile avatars
 ├── includes/                  # Reusable components & utilities
 │   ├── auth-check-admin.php   # Admin route guard
 │   ├── auth-check-client.php  # Client route guard
-│   ├── functions.php          # Sanitization, badges, flash messages, formatters
+│   ├── functions.php          # CSRF tokens, sanitization, flash messages, formatters
 │   ├── head-common.php        # Shared <head> meta, fonts, and scripts
 │   ├── header-admin.php       # Admin navigation header
 │   ├── header-client.php      # Client navigation header
 │   ├── routing.php            # Dynamic role-based redirection helpers
 │   ├── sidebar-admin.php      # Admin sidebar navigation
 │   └── sidebar-client.php     # Client sidebar navigation
-├── js/                        # Client-side scripts
-│   └── app-data.js            # Frontend interactions and state helpers
-├── uploads/                   # Upload storage directories
-│   ├── inquiries/             # Attachments uploaded via inquiry form
-│   └── projects/              # Project deliverable files & assets
-├── .gitignore                 # Git ignore rules
+├── uploads/                   # Upload storage directories (Protected with script execution locks)
+│   ├── .htaccess              # Apache directives preventing script execution in uploads
+│   ├── inquiries/             # Attachments uploaded via inquiry form (.gitkeep)
+│   └── projects/              # Project deliverable files & assets (.gitkeep)
+├── .gitignore                 # Git ignore rules (protects credentials and upload files)
 ├── .htaccess                  # Apache server security & rewrite rules
-├── 404.php                    # Custom error page
-├── admin-dashboard.php        # Admin overview & metric analytics
+├── 404.php                    # Custom 404 Not Found error page
+├── 500.php                    # Custom 500 Server & Database error recovery page
+├── admin-dashboard.php        # Admin overview, client directory, & metric analytics
+├── admin-project.php          # Backward-compatible proxy to admin/project-detail.php
 ├── book-consultation.php      # Consultation booking scheduler
+├── booking-handler.php        # Booking submission processor with CSRF check
 ├── download.php               # Central authenticated file streaming endpoint
 ├── home.php / index.php       # Main landing page & portfolio
 ├── inquiry.php                # Project intake questionnaire
-├── login.php                  # Authentication gateway
+├── inquiry-handler.php        # Inquiry intake processor with MIME & CSRF checks
+├── login.php                  # Authentication gateway with CSRF guard
 ├── logout.php                 # Session termination
-├── register.php               # New client account registration
+├── register.php               # New client account registration with CSRF guard
 └── README.md                  # Project documentation
 ```
 
@@ -150,10 +156,9 @@ git clone https://github.com/KimjayneAntigo/Antigo_UIUX_Advisory_Web_Project.git
    ```sql
    CREATE DATABASE antigo_advisory_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
    ```
-4. Import the base schema and seed data:
+4. Import the schema and seed data (one-click full setup):
    - File: `config/antigo_advisory_db.sql`
-5. Import the schema migration file to update relational fields:
-   - File: `config/schema-migration.sql`
+   *(Note: `config/schema-migration.sql` is also provided if upgrading an existing legacy install.)*
 
 ---
 
@@ -221,4 +226,5 @@ The seed database includes pre-configured demo accounts for both roles (password
   Repository: [Antigo_UIUX_Advisory_Web_Project](https://github.com/KimjayneAntigo/Antigo_UIUX_Advisory_Web_Project)
 
 ---
-This repository and its assets are proprietary and created for **Antigo UI/UX Advisory**. All rights reserved.
+
+## This repository and its assets are proprietary and created for **Antigo UI/UX Advisory**. All rights reserved.
