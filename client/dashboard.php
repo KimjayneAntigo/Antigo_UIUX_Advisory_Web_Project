@@ -26,6 +26,11 @@ $firstName = htmlspecialchars($nameParts[0], ENT_QUOTES, 'UTF-8');
 
 // POST Handlers: Settings (Profile & Password updates)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+        set_flash('error', 'Invalid security token. Please refresh and try again.');
+        safe_redirect('dashboard.php#settings');
+    }
+
     $action = trim($_POST['action'] ?? '');
 
     if ($action === 'update_profile') {
@@ -620,6 +625,7 @@ try {
 
             <form method="POST" action="dashboard.php" class="space-y-4">
               <input type="hidden" name="action" value="update_profile">
+              <?= csrf_input() ?>
 
               <div>
                 <label for="prof_name" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-1.5">Full Name</label>
@@ -667,6 +673,7 @@ try {
 
             <form method="POST" action="dashboard.php" class="space-y-4">
               <input type="hidden" name="action" value="change_password">
+              <?= csrf_input() ?>
 
               <div>
                 <label for="cur_pass" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-1.5">Current Password</label>

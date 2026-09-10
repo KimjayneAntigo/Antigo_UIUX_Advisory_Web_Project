@@ -12,6 +12,12 @@ require_once __DIR__ . '/includes/routing.php';
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css?v=2.0">
 <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+<script>
+  (function() {
+    const saved = localStorage.getItem('antigo_theme') || 'light';
+    document.documentElement.dataset.theme = saved;
+  })();
+</script>
 </head>
 <body>
 
@@ -58,7 +64,7 @@ require_once __DIR__ . '/includes/routing.php';
       <p class="lead">Helping brands create intuitive, engaging, and user-centered interfaces through thoughtful design and modern digital solutions.</p>
       <div class="hero-actions">
         <a href="#services" class="btn btn-primary">View Services</a>
-        <a href="02-book-consultation.html" class="btn btn-outline">Book a Consultation</a>
+        <a href="book-consultation.php" class="btn btn-outline">Book a Consultation</a>
       </div>
       <div class="trust-row">
         <div class="stat"><b>20+</b><span>Projects designed</span></div>
@@ -158,7 +164,7 @@ require_once __DIR__ . '/includes/routing.php';
           <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Dumaguete City, Philippines</div>
           <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>antigokimberlyjayne@gmail.com</div>
         </div>
-        <a href="03-inquiry.html" class="btn btn-primary" style="width:100%;justify-content:center;">Start a Project</a>
+        <a href="inquiry.php" class="btn btn-primary" style="width:100%;justify-content:center;">Start a Project</a>
       </div>
       <div class="about-copy">
         <p>I'm a UI/UX designer and IT student based in Dumaguete City, focused on turning fuzzy problems into interfaces that feel obvious to use. My work sits at the intersection of research, visual design, and front-end craft — I like knowing not just how a screen should look, but why.</p>
@@ -274,8 +280,8 @@ require_once __DIR__ . '/includes/routing.php';
         </div>
         <div>
           <div style="display:flex;gap:14px;flex-wrap:wrap;">
-            <a href="03-inquiry.html" class="btn btn-primary" style="padding:16px 36px;font-size:15px;">Start a Project →</a>
-            <a href="02-book-consultation.html" class="btn btn-outline" style="padding:16px 28px;font-size:15px;">Book Consultation</a>
+            <a href="inquiry.php" class="btn btn-primary" style="padding:16px 36px;font-size:15px;">Start a Project →</a>
+            <a href="book-consultation.php" class="btn btn-outline" style="padding:16px 28px;font-size:15px;">Book Consultation</a>
           </div>
           <p style="font-size:12px;color:var(--text-faint);margin-top:14px;">Response time: within 1 business day · Based in Dumaguete City, PH</p>
         </div>
@@ -362,14 +368,31 @@ require_once __DIR__ . '/includes/routing.php';
   </div>
 </footer>
 
-<script src="js/app-data.js"></script>
 <script>
-  // theme toggle
+  // theme toggle with localStorage persistence
   const toggle = document.getElementById('themeToggle');
-  toggle.addEventListener('click', () => {
-    const root = document.documentElement;
-    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
-  });
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      const root = document.documentElement;
+      const nextTheme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = nextTheme;
+      localStorage.setItem('antigo_theme', nextTheme);
+    });
+  }
+
+  // mobile navigation drawer toggle
+  const burger = document.querySelector('.burger');
+  const navLinks = document.querySelector('.nav-links');
+  if (burger && navLinks) {
+    burger.addEventListener('click', () => {
+      navLinks.classList.toggle('nav-open');
+    });
+    navLinks.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        navLinks.classList.remove('nav-open');
+      });
+    });
+  }
 
   // reveal skill bars when scrolled into view
   const bars = document.querySelectorAll('.skill-bar');

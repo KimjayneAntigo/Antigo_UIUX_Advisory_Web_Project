@@ -11,8 +11,13 @@ $pageSubheading = 'Qualify incoming leads, track client status, and convert inqu
 
 $statusWhitelist = ['new', 'reviewed', 'contacted', 'converted', 'lost'];
 
-// POST Handler: Status Update or Convert to Project
+// POST Handler: Status Update, Convert to Project, or Delete
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+        set_flash('error', 'Invalid or expired security token. Please try again.');
+        safe_redirect('inquiries.php');
+    }
+
     $action    = trim($_POST['action'] ?? '');
     $inquiryId = (int) ($_POST['inquiry_id'] ?? 0);
 
@@ -43,109 +48,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Convert to Project Action
     if ($action === 'convert_to_project') {
+        $res = convert_inquiry_to_project($pdo, $inquiryId);
+        if ($res['success']) {
+            set_flash('success', "Inquiry successfully converted to Project {$res['project_code']}!");
+            safe_redirect("project-detail.php?id={$res['project_id']}");
+        } else {
+            set_flash('error', $res['error'] ?? 'Database error converting inquiry to project.');
+            safe_redirect('inquiries.php');
+        }
+    }
+
+    // Delete Inquiry Action
+    if ($action === 'delete_inquiry') {
         try {
-            // Fetch inquiry row
-            $stmt = $pdo->prepare('SELECT * FROM inquiries WHERE id = ? LIMIT 1');
-            $stmt->execute([$inquiryId]);
-            $inq = $stmt->fetch();
-
-            if (!$inq) {
-                set_flash('error', 'Inquiry not found.');
-                safe_redirect('inquiries.php');
-            }
-
-            // Find matching user_id if inquiry doesn't have one
-            $userId = $inq['user_id'];
-            if (!$userId && !empty($inq['email'])) {
-                $uStmt = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
-                $uStmt->execute([$inq['email']]);
-                $uRow = $uStmt->fetch();
-                if ($uRow) {
-                    $userId = (int) $uRow['id'];
+            $fStmt = $pdo->prepare('SELECT file_name FROM inquiries WHERE id = ? LIMIT 1');
+            $fStmt->execute([$inquiryId]);
+            $inqRow = $fStmt->fetch();
+            if ($inqRow && !empty($inqRow['file_name'])) {
+                $filePath = __DIR__ . '/../uploads/inquiries/' . $inqRow['file_name'];
+                if (file_exists($filePath)) {
+                    @unlink($filePath);
                 }
             }
 
-            // Generate unique project_code
-            $maxCodeStmt = $pdo->query('SELECT MAX(id) AS max_id FROM projects');
-            $nextNum = ((int) ($maxCodeStmt->fetch()['max_id'] ?? 0)) + 3001;
-            $projectCode = 'PRJ-' . $nextNum;
-
-            $clientDisplayName = !empty($inq['company']) ? $inq['company'] : $inq['name'];
-            $serviceName       = !empty($inq['service']) ? $inq['service'] : 'UI/UX Design';
-            $projectTitle      = $clientDisplayName . ' – ' . $serviceName;
-            $budgetVal         = !empty($inq['budget']) ? $inq['budget'] : '$150,000 – $300,000';
-            $budgetVal         = str_replace('₱', '$', $budgetVal);
-            $dueDate           = date('Y-m-d', strtotime('+30 days'));
-
-            $pdo->beginTransaction();
-
-            $pStmt = $pdo->prepare(
-                'INSERT INTO projects
-                    (user_id, project_code, title, category, client_name, client_email, company, budget, due_date,
-                     current_phase, phase_name, progress, status, status_type, internal_notes, created_at, updated_at)
-                 VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, \'Discovery & Research\', 20, \'Discovery\', \'in_design\', ?, NOW(), NOW())'
-            );
-
-            $notes = "Converted from Inquiry ref: {$inq['ref_code']}.\nDescription: {$inq['description']}";
-            $pStmt->execute([
-                $userId,
-                $projectCode,
-                $projectTitle,
-                $serviceName,
-                $inq['name'],
-                $inq['email'],
-                $inq['company'] ?: null,
-                $budgetVal,
-                $dueDate,
-                $notes,
-            ]);
-
-            $newProjectId = (int) $pdo->lastInsertId();
-
-            // Mark inquiry as converted
-            $updInq = $pdo->prepare("UPDATE inquiries SET status = 'converted' WHERE id = ?");
-            $updInq->execute([$inquiryId]);
-
-            // If an attached file exists in inquiry, link it to project_files
-            if (!empty($inq['attached_file'])) {
-                $fStmt = $pdo->prepare(
-                    'INSERT INTO project_files (project_id, uploaded_by, name, size, file_path, uploaded_at)
-                     VALUES (?, ?, ?, ?, ?, NOW())'
-                );
-                $fStmt->execute([
-                    $newProjectId,
-                    (int)($_SESSION['user_id'] ?? 0),
-                    basename($inq['attached_file']),
-                    'Reference Brief',
-                    'uploads/inquiries/' . $inq['attached_file'],
-                ]);
-            }
-
-            // Insert initial system message into thread
-            $mStmt = $pdo->prepare(
-                'INSERT INTO project_messages (project_id, sender, role, message, created_at)
-                 VALUES (?, ?, \'designer\', ?, NOW())'
-            );
-            $mStmt->execute([
-                $newProjectId,
-                $_SESSION['user_name'] ?? 'Admin',
-                "Project workspace initialized from inquiry {$inq['ref_code']}. Discovery phase is now active.",
-            ]);
-
-            $pdo->commit();
-
-            set_flash('success', "Inquiry successfully converted to Project {$projectCode}!");
-            safe_redirect("project-detail.php?id={$newProjectId}");
-
+            $delStmt = $pdo->prepare('DELETE FROM inquiries WHERE id = ?');
+            $delStmt->execute([$inquiryId]);
+            set_flash('success', 'Inquiry lead deleted successfully.');
         } catch (\PDOException $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            error_log('inquiries.php convert_to_project error: ' . $e->getMessage());
-            set_flash('error', 'Database error converting inquiry to project.');
-            safe_redirect('inquiries.php');
+            error_log('inquiries.php delete_inquiry error: ' . $e->getMessage());
+            set_flash('error', 'Database error deleting inquiry.');
         }
+        safe_redirect('inquiries.php');
     }
 
     set_flash('error', 'Unknown action.');
@@ -310,6 +243,7 @@ $totalPages = max(1, (int) ceil($totalRows / $perPage));
                     <td class="py-4 px-4">
                       <!-- Quick Status Dropdown Form -->
                       <form method="POST" action="inquiries.php" class="inline-block">
+                        <?= csrf_input() ?>
                         <input type="hidden" name="action" value="update_status">
                         <input type="hidden" name="inquiry_id" value="<?= (int) $inq['id'] ?>">
                         <select name="status"
@@ -335,6 +269,7 @@ $totalPages = max(1, (int) ceil($totalRows / $perPage));
                       <?php if ($inq['status'] !== 'converted'): ?>
                         <form method="POST" action="inquiries.php" class="inline-block"
                               onsubmit="return confirm('Convert this inquiry into an Active Project? This will create a project workspace.');">
+                          <?= csrf_input() ?>
                           <input type="hidden" name="action" value="convert_to_project">
                           <input type="hidden" name="inquiry_id" value="<?= (int) $inq['id'] ?>">
                           <button type="submit"
@@ -349,6 +284,16 @@ $totalPages = max(1, (int) ceil($totalRows / $perPage));
                           <iconify-icon icon="lucide:check-check"></iconify-icon> Converted
                         </span>
                       <?php endif; ?>
+
+                      <form method="POST" action="inquiries.php" class="inline-block"
+                            onsubmit="return confirm('Are you sure you want to permanently delete this inquiry lead?');">
+                        <?= csrf_input() ?>
+                        <input type="hidden" name="action" value="delete_inquiry">
+                        <input type="hidden" name="inquiry_id" value="<?= (int) $inq['id'] ?>">
+                        <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors" title="Delete inquiry">
+                          <iconify-icon icon="lucide:trash-2" class="text-sm"></iconify-icon>
+                        </button>
+                      </form>
                     </td>
                   </tr>
                 <?php endforeach; ?>
@@ -441,19 +386,34 @@ $totalPages = max(1, (int) ceil($totalRows / $perPage));
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[rgba(19,34,75,0.08)]">
-        <form method="POST" action="inquiries.php" id="modalConvertForm"
-              onsubmit="return confirm('Convert this inquiry into an active project?');">
-          <input type="hidden" name="action" value="convert_to_project">
-          <input type="hidden" name="inquiry_id" id="modalConvertInquiryId" value="">
-          <button type="submit" id="modalConvertBtn"
-                  class="btn-primary py-2.5 px-5 text-xs font-bold inline-flex items-center gap-2">
-            <iconify-icon icon="lucide:sparkles"></iconify-icon>
-            <span>Convert to Project</span>
-          </button>
-        </form>
+        <div class="flex items-center gap-2">
+          <form method="POST" action="inquiries.php" id="modalConvertForm"
+                onsubmit="return confirm('Convert this inquiry into an active project?');">
+            <?= csrf_input() ?>
+            <input type="hidden" name="action" value="convert_to_project">
+            <input type="hidden" name="inquiry_id" id="modalConvertInquiryId" value="">
+            <button type="submit" id="modalConvertBtn"
+                    class="btn-primary py-2.5 px-5 text-xs font-bold inline-flex items-center gap-2">
+              <iconify-icon icon="lucide:sparkles"></iconify-icon>
+              <span>Convert to Project</span>
+            </button>
+          </form>
+
+          <form method="POST" action="inquiries.php" id="modalDeleteForm"
+                onsubmit="return confirm('Are you sure you want to permanently delete this inquiry lead?');">
+            <?= csrf_input() ?>
+            <input type="hidden" name="action" value="delete_inquiry">
+            <input type="hidden" name="inquiry_id" id="modalDeleteInquiryId" value="">
+            <button type="submit"
+                    class="px-4 py-2.5 rounded-xl border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 inline-flex items-center gap-1.5 transition-colors">
+              <iconify-icon icon="lucide:trash-2"></iconify-icon>
+              <span>Delete Lead</span>
+            </button>
+          </form>
+        </div>
 
         <button type="button" onclick="closeInquiryModal()"
-                class="px-5 py-2.5 rounded-lg border border-[rgba(19,34,75,0.12)] text-xs font-bold text-[#4b4b4b] hover:bg-[#F4F6F8]">
+                class="px-5 py-2.5 rounded-xl border border-[rgba(19,34,75,0.12)] text-xs font-bold text-[#4b4b4b] hover:bg-[#F4F6F8]">
           Close
         </button>
       </div>
@@ -473,6 +433,7 @@ $totalPages = max(1, (int) ceil($totalRows / $perPage));
       document.getElementById('modalTimeline').innerText      = inq.timeline;
       document.getElementById('modalDescription').innerText   = inq.description;
       document.getElementById('modalConvertInquiryId').value  = inq.id;
+      document.getElementById('modalDeleteInquiryId').value   = inq.id;
 
       const fileBlock = document.getElementById('modalFileBlock');
       if (inq.attached_file) {

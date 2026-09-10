@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/routing.php';
+require_once __DIR__ . '/includes/functions.php';
 
 // If already logged in, redirect to the appropriate dashboard.
 if (is_logged_in()) {
@@ -14,8 +15,11 @@ $success = '';
 
 // POST HANDLER
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email    = trim($_POST['email']    ?? '');
-    $password =      $_POST['password'] ?? '';
+    if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+        $error = 'Invalid security token. Please refresh and try again.';
+    } else {
+        $email    = trim($_POST['email']    ?? '');
+        $password =      $_POST['password'] ?? '';
 
     if (empty($email) || empty($password)) {
         $error = 'Please enter both email and password.';
@@ -41,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: ' . home_url());
             exit;
         }
+    }
     }
 }
 
@@ -239,6 +244,7 @@ $flash = $_GET['msg'] ?? '';
 
                     <!-- Form — POSTs to this same page -->
                     <form method="POST" action="login.php" class="space-y-5" novalidate>
+                        <?= csrf_input() ?>
                         <!-- Client-side validation error (JS only, no server round-trip needed) -->
                         <div id="js-error" class="hidden p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-medium"></div>
 

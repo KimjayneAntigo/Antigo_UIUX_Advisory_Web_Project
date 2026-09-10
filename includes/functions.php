@@ -216,3 +216,162 @@ function format_filesize(int $bytes): string
     return round($bytes / 1073741824, 1) . ' GB';
 }
 
+/**
+ * Generate or retrieve a CSRF token for the current session.
+ */
+function generate_csrf_token(): string
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+/**
+ * Verify that a submitted CSRF token matches the session token.
+ */
+function verify_csrf_token(?string $token): bool
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    if (empty($token) || empty($_SESSION['csrf_token'])) {
+        return false;
+    }
+    return hash_equals($_SESSION['csrf_token'], $token);
+}
+
+/**
+ * Render a hidden HTML input containing the CSRF token.
+ */
+function csrf_input(): string
+{
+    $token = htmlspecialchars(generate_csrf_token(), ENT_QUOTES, 'UTF-8');
+    return '<input type="hidden" name="csrf_token" value="' . $token . '">';
+}
+
+/**
+ * Convert an existing inquiry into an active project in a database transaction.
+ *
+ * @param PDO $pdo
+ * @param int $inquiryId
+ * @return array{success:bool, project_id?:int, project_code?:string, error?:string}
+ */
+function convert_inquiry_to_project(PDO $pdo, int $inquiryId): array
+{
+    if ($inquiryId <= 0) {
+        return ['success' => false, 'error' => 'Invalid inquiry reference.'];
+    }
+
+    try {
+        $stmt = $pdo->prepare('SELECT * FROM inquiries WHERE id = ? LIMIT 1');
+        $stmt->execute([$inquiryId]);
+        $inq = $stmt->fetch();
+
+        if (!$inq) {
+            return ['success' => false, 'error' => 'Inquiry not found.'];
+        }
+
+        // Find matching user_id if inquiry doesn't have one
+        $userId = $inq['user_id'] ?? null;
+        if (!$userId && !empty($inq['email'])) {
+            $uStmt = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+            $uStmt->execute([$inq['email']]);
+            $uRow = $uStmt->fetch();
+            if ($uRow) {
+                $userId = (int) $uRow['id'];
+            }
+        }
+
+        // Generate unique project_code
+        $maxCodeStmt = $pdo->query('SELECT MAX(id) AS max_id FROM projects');
+        $nextNum = ((int) ($maxCodeStmt->fetch()['max_id'] ?? 0)) + 3001;
+        $projectCode = 'PRJ-' . $nextNum;
+
+        $clientDisplayName = !empty($inq['company']) ? $inq['company'] : $inq['name'];
+        $serviceName       = !empty($inq['service']) ? $inq['service'] : (!empty($inq['project_type']) ? $inq['project_type'] : 'UI/UX Design');
+        $projectTitle      = $clientDisplayName . ' – ' . $serviceName;
+        $budgetVal         = !empty($inq['budget']) ? $inq['budget'] : '$150,000 – $300,000';
+        $budgetVal         = str_replace('₱', '$', $budgetVal);
+        $dueDate           = date('Y-m-d', strtotime('+30 days'));
+
+        $pdo->beginTransaction();
+
+        $pStmt = $pdo->prepare(
+            'INSERT INTO projects
+                (user_id, project_code, title, category, client_name, client_email, company, budget, due_date,
+                 current_phase, phase_name, progress, status, status_type, internal_notes, created_at, updated_at)
+             VALUES
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, \'Discovery & Research\', 20, \'Discovery\', \'in_design\', ?, NOW(), NOW())'
+        );
+
+        $notes = "Converted from Inquiry ref: " . ($inq['ref_code'] ?? ('INQ-' . $inquiryId)) . ".\nDescription: " . ($inq['description'] ?? '');
+        $pStmt->execute([
+            $userId,
+            $projectCode,
+            $projectTitle,
+            $serviceName,
+            $inq['name'],
+            $inq['email'],
+            $inq['company'] ?: null,
+            $budgetVal,
+            $dueDate,
+            $notes,
+        ]);
+
+        $newProjectId = (int) $pdo->lastInsertId();
+
+        // Mark inquiry as converted
+        $upInqStmt = $pdo->prepare('UPDATE inquiries SET status = \'converted\' WHERE id = ?');
+        $upInqStmt->execute([$inquiryId]);
+
+        // Copy inquiry file as initial project file if one was uploaded
+        if (!empty($inq['file_name'])) {
+            $inqFilePath = __DIR__ . '/../uploads/inquiries/' . $inq['file_name'];
+            if (file_exists($inqFilePath)) {
+                $projUploadDir = __DIR__ . '/../uploads/projects/' . $newProjectId . '/';
+                if (!is_dir($projUploadDir)) {
+                    mkdir($projUploadDir, 0755, true);
+                }
+                $newFileName = 'inquiry_' . $inq['file_name'];
+                $projDestPath = $projUploadDir . $newFileName;
+                if (@copy($inqFilePath, $projDestPath)) {
+                    $relPath = 'uploads/projects/' . $newProjectId . '/' . $newFileName;
+                    $fileSizeStr = format_filesize((int) filesize($projDestPath));
+                    $fStmt = $pdo->prepare(
+                        'INSERT INTO project_files (project_id, uploaded_by, name, size, file_path, uploaded_at)
+                         VALUES (?, ?, ?, ?, ?, NOW())'
+                    );
+                    $fStmt->execute([$newProjectId, $userId, $inq['file_name'], $fileSizeStr, $relPath]);
+                }
+            }
+        }
+
+        // Add initial system message
+        $msgStmt = $pdo->prepare(
+            'INSERT INTO project_messages (project_id, sender, role, message, created_at)
+             VALUES (?, \'Kimberly Jayne Antigo\', \'designer\', ?, NOW())'
+        );
+        $welcomeMsg = "Welcome to your project workspace! We have set up your project based on your inquiry. Let's build something extraordinary together.";
+        $msgStmt->execute([$newProjectId, $welcomeMsg]);
+
+        $pdo->commit();
+
+        return [
+            'success'      => true,
+            'project_id'   => $newProjectId,
+            'project_code' => $projectCode,
+        ];
+    } catch (\Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('convert_inquiry_to_project error: ' . $e->getMessage());
+        return ['success' => false, 'error' => 'Database error during project conversion: ' . $e->getMessage()];
+    }
+}
+
+

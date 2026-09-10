@@ -332,7 +332,30 @@ footer .logo-text .sub{color:#FFFFFF;letter-spacing:.22em;}
   .footer-grid{grid-template-columns:1fr 1fr;}
 }
 @media(max-width:720px){
+  nav{position:relative;padding:14px 20px;}
   .nav-links{display:none;}
+  .nav-links.nav-open{
+    display:flex;
+    flex-direction:column;
+    position:absolute;
+    top:100%;
+    left:0;
+    right:0;
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+    padding:20px 24px;
+    gap:16px;
+    box-shadow:0 12px 30px rgba(19,34,75,0.12);
+    z-index:99;
+  }
+  .nav-links.nav-open li{list-style:none;}
+  .nav-links.nav-open li a{
+    display:block;
+    padding:8px 0;
+    font-size:15px;
+    font-weight:600;
+    color:var(--text);
+  }
   .burger{display:flex;}
   .wrap{padding:0 22px;}
   .pad{padding:80px 0;}

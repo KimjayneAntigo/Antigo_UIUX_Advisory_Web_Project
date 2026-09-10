@@ -1,1 +1,15 @@
-﻿config/db.php
+﻿# Environment & Database secrets
+config/db.php
+
+# User uploads (keep directory structure via .gitkeep)
+uploads/inquiries/*
+!uploads/inquiries/.gitkeep
+uploads/projects/*
+!uploads/projects/.gitkeep
+
+# System & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log

@@ -492,6 +492,7 @@ if ($is_client_user) {
             body.append('budget',      document.getElementById('budget').value);
             body.append('timeline',    document.getElementById('timeline').value);
             body.append('description', document.getElementById('description').value.trim());
+            body.append('csrf_token',  <?= json_encode(generate_csrf_token()) ?>);
 
             const fileInput = document.getElementById('fileInput');
             if (fileInput.files && fileInput.files[0]) {

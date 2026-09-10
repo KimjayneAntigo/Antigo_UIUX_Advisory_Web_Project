@@ -16,6 +16,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// CSRF check
+if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Security token invalid or expired. Please refresh the page.']);
+    exit;
+}
+
 //  Whitelists 
 $allowed_services  = [
     'UI Design',

@@ -42,6 +42,11 @@ $projectId = (int) $project['id'];
 
 //  POST handlers
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+        set_flash('error', 'Invalid or expired security token. Please try again.');
+        safe_redirect("project-detail.php?id={$projectId}");
+    }
+
     $action = trim($_POST['action'] ?? '');
 
     // Update Stage
@@ -94,6 +99,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             set_flash('error', 'Invalid file type. Allowed: ' . implode(', ', $allowedExts) . '.');
             safe_redirect("project-detail.php?id={$projectId}");
         }
+
+        // MIME type inspection for upload security
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime  = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+
+        $allowedMimes = [
+            'application/pdf',
+            'image/png',
+            'image/jpeg',
+            'image/webp',
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/msword',
+            'application/octet-stream',
+            'text/plain',
+        ];
+
+        if (!in_array($mime, $allowedMimes, true)) {
+            set_flash('error', 'Security check failed: File content type not permitted.');
+            safe_redirect("project-detail.php?id={$projectId}");
+        }
+
         if ($size > $maxBytes) {
             set_flash('error', 'File exceeds the 10 MB limit (' . format_filesize($size) . ' uploaded).');
             safe_redirect("project-detail.php?id={$projectId}");
@@ -136,6 +165,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Remove orphan file
             @unlink($destPath);
             set_flash('error', 'File saved on disk but database entry failed. Contact support.');
+        }
+        safe_redirect("project-detail.php?id={$projectId}");
+    }
+
+    // Delete File
+    if ($action === 'delete_file') {
+        $fileId = (int) ($_POST['file_id'] ?? 0);
+        if ($fileId <= 0) {
+            set_flash('error', 'Invalid file specified.');
+            safe_redirect("project-detail.php?id={$projectId}");
+        }
+
+        try {
+            $fStmt = $pdo->prepare('SELECT * FROM project_files WHERE id = ? AND project_id = ? LIMIT 1');
+            $fStmt->execute([$fileId, $projectId]);
+            $fileRow = $fStmt->fetch();
+
+            if (!$fileRow) {
+                set_flash('error', 'Deliverable file not found.');
+                safe_redirect("project-detail.php?id={$projectId}");
+            }
+
+            // Remove physical file from disk
+            if (!empty($fileRow['file_path'])) {
+                $fullPath = __DIR__ . '/../' . ltrim($fileRow['file_path'], '/\\');
+                if (file_exists($fullPath)) {
+                    @unlink($fullPath);
+                }
+            }
+
+            // Delete database record
+            $delStmt = $pdo->prepare('DELETE FROM project_files WHERE id = ? AND project_id = ?');
+            $delStmt->execute([$fileId, $projectId]);
+
+            set_flash('success', 'Deliverable file deleted successfully.');
+        } catch (\PDOException $e) {
+            error_log('project-detail delete_file error: ' . $e->getMessage());
+            set_flash('error', 'Database error deleting file.');
         }
         safe_redirect("project-detail.php?id={$projectId}");
     }
@@ -525,6 +592,7 @@ function file_icon(string $name): string
             <!-- Stage update form -->
             <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
                   class="flex items-center gap-2 flex-shrink-0">
+                <?= csrf_input() ?>
                 <input type="hidden" name="action" value="update_stage">
                 <label class="text-xs font-bold text-[#8890AA] whitespace-nowrap hidden sm:block">Phase:</label>
                 <select name="stage" class="antigo-select">
@@ -638,12 +706,22 @@ function file_icon(string $name): string
                                         </p>
                                     </div>
                                 </div>
-                                <a href="download.php?file_id=<?= (int)$f['id'] ?>"
-                                   class="flex-shrink-0 flex items-center gap-1 text-xs font-bold text-[#4C6CCB] hover:text-[#6C5BB5] hover:underline transition-colors"
-                                   title="Download <?= htmlspecialchars($f['name'], ENT_QUOTES, 'UTF-8') ?>">
-                                    <iconify-icon icon="lucide:download" class="text-sm"></iconify-icon>
-                                    Download
-                                </a>
+                                <div class="flex items-center gap-2">
+                                    <a href="download.php?file_id=<?= (int)$f['id'] ?>"
+                                       class="flex-shrink-0 flex items-center gap-1 text-xs font-bold text-[#4C6CCB] hover:text-[#6C5BB5] hover:underline transition-colors"
+                                       title="Download <?= htmlspecialchars($f['name'], ENT_QUOTES, 'UTF-8') ?>">
+                                        <iconify-icon icon="lucide:download" class="text-sm"></iconify-icon>
+                                        Download
+                                    </a>
+                                    <form method="POST" action="project-detail.php?id=<?= $projectId ?>" onsubmit="return confirm('Are you sure you want to delete this deliverable file?');" class="inline">
+                                        <?= csrf_input() ?>
+                                        <input type="hidden" name="action" value="delete_file">
+                                        <input type="hidden" name="file_id" value="<?= (int)$f['id'] ?>">
+                                        <button type="submit" class="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors" title="Delete deliverable">
+                                            <iconify-icon icon="lucide:trash-2" class="text-sm"></iconify-icon>
+                                        </button>
+                                    </form>
+                                </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -652,6 +730,7 @@ function file_icon(string $name): string
                 <!-- Upload form -->
                 <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
                       enctype="multipart/form-data" id="uploadForm">
+                    <?= csrf_input() ?>
                     <input type="hidden" name="action" value="upload_file">
                     <input type="file" name="project_file" id="fileInput" class="hidden"
                            accept=".pdf,.fig,.png,.jpg,.jpeg,.docx,.zip"
@@ -722,6 +801,7 @@ function file_icon(string $name): string
 
                 <!-- Send message form -->
                 <form method="POST" action="project-detail.php?id=<?= $projectId ?>">
+                    <?= csrf_input() ?>
                     <input type="hidden" name="action" value="send_message">
                     <div class="flex gap-2">
                         <textarea name="message" rows="2" maxlength="2000" required
@@ -841,6 +921,7 @@ function file_icon(string $name): string
 
                 <div class="notes-confidential p-4 mb-4 rounded-r-2xl">
                     <form method="POST" action="project-detail.php?id=<?= $projectId ?>" id="notesForm">
+                        <?= csrf_input() ?>
                         <input type="hidden" name="action" value="update_notes">
                         <textarea name="internal_notes" rows="5"
                                   class="w-full bg-transparent border-none outline-none resize-none font-medium text-xs text-amber-800 italic leading-relaxed placeholder-amber-400"

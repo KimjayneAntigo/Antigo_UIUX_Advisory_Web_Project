@@ -11,151 +11,27 @@ require_once 'includes/routing.php';
 
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+        set_flash('error', 'Invalid or expired security token. Please try again.');
+        safe_redirect('admin-dashboard.php');
+    }
+
     $action = trim($_POST['action'] ?? '');
 
     // Convert Inquiry to Project
     if ($action === 'convert_to_project') {
         $inquiryId = (int) ($_POST['inquiry_id'] ?? 0);
-        if ($inquiryId <= 0) {
-            if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
-                header('Content-Type: application/json');
-                http_response_code(400);
-                echo json_encode(['success' => false, 'error' => 'Invalid inquiry ID.']);
-                exit;
-            }
-            set_flash('error', 'Invalid inquiry reference.');
-            safe_redirect('admin-dashboard.php');
-        }
-
-        try {
-            $stmt = $pdo->prepare('SELECT * FROM inquiries WHERE id = ? LIMIT 1');
-            $stmt->execute([$inquiryId]);
-            $inq = $stmt->fetch();
-
-            if (!$inq) {
-                if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
-                    header('Content-Type: application/json');
-                    http_response_code(404);
-                    echo json_encode(['success' => false, 'error' => 'Inquiry not found.']);
-                    exit;
-                }
-                set_flash('error', 'Inquiry not found.');
-                safe_redirect('admin-dashboard.php');
-            }
-
-            // Find matching user_id if inquiry doesn't have one
-            $userId = $inq['user_id'];
-            if (!$userId && !empty($inq['email'])) {
-                $uStmt = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
-                $uStmt->execute([$inq['email']]);
-                $uRow = $uStmt->fetch();
-                if ($uRow) {
-                    $userId = (int) $uRow['id'];
-                }
-            }
-
-            // Generate unique project_code
-            $maxCodeStmt = $pdo->query('SELECT MAX(id) AS max_id FROM projects');
-            $nextNum = ((int) ($maxCodeStmt->fetch()['max_id'] ?? 0)) + 3001;
-            $projectCode = 'PRJ-' . $nextNum;
-
-            $clientDisplayName = !empty($inq['company']) ? $inq['company'] : $inq['name'];
-            $serviceName       = !empty($inq['service']) ? $inq['service'] : 'UI/UX Design';
-            $projectTitle      = $clientDisplayName . ' – ' . $serviceName;
-            $budgetVal         = !empty($inq['budget']) ? $inq['budget'] : '$150,000 – $300,000';
-            $budgetVal         = str_replace('₱', '$', $budgetVal);
-            $dueDate           = date('Y-m-d', strtotime('+30 days'));
-
-            $pdo->beginTransaction();
-
-            $pStmt = $pdo->prepare(
-                'INSERT INTO projects
-                    (user_id, project_code, title, category, client_name, client_email, company, budget, due_date,
-                     current_phase, phase_name, progress, status, status_type, internal_notes, created_at, updated_at)
-                 VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, \'Discovery & Research\', 20, \'Discovery\', \'pending\', ?, NOW(), NOW())'
-            );
-
-            $notes = "Converted from Inquiry ref: " . ($inq['ref_code'] ?? 'N/A') . ".\nDescription: " . ($inq['description'] ?? '');
-            $pStmt->execute([
-                $userId,
-                $projectCode,
-                $projectTitle,
-                $serviceName,
-                $inq['name'],
-                $inq['email'],
-                $inq['company'] ?: null,
-                $budgetVal,
-                $dueDate,
-                $notes,
-            ]);
-
-            $newProjectId = (int) $pdo->lastInsertId();
-
-            // Mark inquiry as converted
-            $updInq = $pdo->prepare("UPDATE inquiries SET status = 'converted' WHERE id = ?");
-            $updInq->execute([$inquiryId]);
-
-            // If attached file exists, link to project_files
-            if (!empty($inq['attached_file'])) {
-                $fStmt = $pdo->prepare(
-                    'INSERT INTO project_files (project_id, uploaded_by, name, size, file_path, uploaded_at)
-                     VALUES (?, ?, ?, ?, ?, NOW())'
-                );
-                $fStmt->execute([
-                    $newProjectId,
-                    (int) ($_SESSION['user_id'] ?? 0),
-                    basename($inq['attached_file']),
-                    'Reference Brief',
-                    'uploads/inquiries/' . $inq['attached_file'],
-                ]);
-            }
-
-            // Insert initial system message into thread
-            $mStmt = $pdo->prepare(
-                'INSERT INTO project_messages (project_id, sender, role, message, created_at)
-                 VALUES (?, ?, \'designer\', ?, NOW())'
-            );
-            $mStmt->execute([
-                $newProjectId,
-                $_SESSION['user_name'] ?? 'Admin',
-                "Project workspace initialized from inquiry " . ($inq['ref_code'] ?? '') . ". Discovery phase is now active.",
-            ]);
-
-            $pdo->commit();
-
-            set_flash('success', "Inquiry successfully converted to Project {$projectCode}!");
-
-            if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
-                header('Content-Type: application/json');
-                echo json_encode([
-                    'success' => true,
-                    'project_id' => $newProjectId,
-                    'project_code' => $projectCode,
-                    'redirect' => "admin-project.php?id={$newProjectId}"
-                ]);
-                exit;
-            }
-
-            safe_redirect("admin-project.php?id={$newProjectId}");
-
-        } catch (\PDOException $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            error_log('admin-dashboard convert error: ' . $e->getMessage());
-            if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
-                header('Content-Type: application/json');
-                http_response_code(500);
-                echo json_encode(['success' => false, 'error' => 'Database error converting inquiry.']);
-                exit;
-            }
-            set_flash('error', 'Database error converting inquiry to project.');
+        $res = convert_inquiry_to_project($pdo, $inquiryId);
+        if ($res['success']) {
+            set_flash('success', "Inquiry successfully converted to Project {$res['project_code']}!");
+            safe_redirect("admin/project-detail.php?id={$res['project_id']}");
+        } else {
+            set_flash('error', $res['error'] ?? 'Database error converting inquiry to project.');
             safe_redirect('admin-dashboard.php');
         }
     }
 
-    // Update Status Action
+    // Update Inquiry Status Action
     if ($action === 'update_status') {
         $inquiryId = (int) ($_POST['inquiry_id'] ?? 0);
         $status    = trim($_POST['status'] ?? '');
@@ -171,13 +47,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 set_flash('error', 'Could not update status.');
             }
         }
+        safe_redirect('admin-dashboard.php');
+    }
 
-        if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => true]);
-            exit;
+    // Delete Inquiry Action
+    if ($action === 'delete_inquiry') {
+        $inquiryId = (int) ($_POST['inquiry_id'] ?? 0);
+        if ($inquiryId > 0) {
+            try {
+                $fStmt = $pdo->prepare('SELECT file_name FROM inquiries WHERE id = ? LIMIT 1');
+                $fStmt->execute([$inquiryId]);
+                $inqRow = $fStmt->fetch();
+                if ($inqRow && !empty($inqRow['file_name'])) {
+                    $filePath = __DIR__ . '/uploads/inquiries/' . $inqRow['file_name'];
+                    if (file_exists($filePath)) {
+                        @unlink($filePath);
+                    }
+                }
+                $delStmt = $pdo->prepare('DELETE FROM inquiries WHERE id = ?');
+                $delStmt->execute([$inquiryId]);
+                set_flash('success', 'Inquiry lead deleted successfully.');
+            } catch (\PDOException $e) {
+                error_log('admin-dashboard delete_inquiry error: ' . $e->getMessage());
+                set_flash('error', 'Database error deleting inquiry.');
+            }
         }
         safe_redirect('admin-dashboard.php');
+    }
+
+    // Update Booking Status Action
+    if ($action === 'update_booking_status') {
+        $bookingId = (int) ($_POST['booking_id'] ?? 0);
+        $newStatus = trim($_POST['status'] ?? '');
+        $bookingWhitelist = ['pending', 'confirmed', 'completed', 'cancelled'];
+        if ($bookingId > 0 && in_array($newStatus, $bookingWhitelist, true)) {
+            try {
+                $stmt = $pdo->prepare('UPDATE bookings SET status = ? WHERE id = ?');
+                $stmt->execute([$newStatus, $bookingId]);
+                set_flash('success', 'Booking marked as ' . ucfirst($newStatus) . '.');
+            } catch (\PDOException $e) {
+                error_log('admin-dashboard update_booking_status error: ' . $e->getMessage());
+                set_flash('error', 'Database error updating booking.');
+            }
+        }
+        safe_redirect('admin-dashboard.php#bookings');
+    }
+
+    // Delete / Cancel Booking Action
+    if ($action === 'delete_booking') {
+        $bookingId = (int) ($_POST['booking_id'] ?? 0);
+        if ($bookingId > 0) {
+            try {
+                $delStmt = $pdo->prepare('DELETE FROM bookings WHERE id = ?');
+                $delStmt->execute([$bookingId]);
+                set_flash('success', 'Consultation booking deleted successfully.');
+            } catch (\PDOException $e) {
+                error_log('admin-dashboard delete_booking error: ' . $e->getMessage());
+                set_flash('error', 'Database error deleting booking.');
+            }
+        }
+        safe_redirect('admin-dashboard.php#bookings');
     }
 }
 
@@ -185,12 +114,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $inquiries = [];
 $bookings  = [];
 $projects  = [];
+$clients   = [];
 $totalPipeline = 0;
 
 try {
     $inquiries = $pdo->query('SELECT * FROM inquiries ORDER BY created_at DESC')->fetchAll();
     $bookings  = $pdo->query('SELECT * FROM bookings ORDER BY date DESC, time DESC')->fetchAll();
     $projects  = $pdo->query('SELECT * FROM projects ORDER BY created_at DESC')->fetchAll();
+    $clients   = $pdo->query("SELECT u.*, COUNT(p.id) AS project_count FROM users u LEFT JOIN projects p ON u.id = p.user_id WHERE u.role = 'client' GROUP BY u.id ORDER BY u.created_at DESC")->fetchAll();
 
     foreach ($projects as $p) {
         $num = (int) preg_replace('/[^0-9]/', '', $p['budget'] ?? '');
@@ -463,10 +394,18 @@ try {
                                     <td class="py-4 px-4">
                                         <span class="px-2.5 py-1 rounded-full text-[10px] font-bold <?= $badgeClass ?> uppercase tracking-wider"><?= htmlspecialchars($inq['status']) ?></span>
                                     </td>
-                                    <td class="py-4 px-4 text-right">
+                                    <td class="py-4 px-4 text-right whitespace-nowrap space-x-1">
                                         <button type="button" onclick="openInquiryModal(<?= (int)$inq['id'] ?>)" class="px-3 py-1.5 rounded-lg border border-[rgba(19,34,75,0.12)] text-xs font-bold text-[#13224B] hover:bg-white transition-colors">
-                                            Review &amp; Qualify
+                                            Review
                                         </button>
+                                        <form method="POST" action="admin-dashboard.php" onsubmit="return confirm('Are you sure you want to delete this inquiry?');" class="inline">
+                                            <?= csrf_input() ?>
+                                            <input type="hidden" name="action" value="delete_inquiry">
+                                            <input type="hidden" name="inquiry_id" value="<?= (int)$inq['id'] ?>">
+                                            <button type="submit" class="p-1.5 rounded-lg border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors" title="Delete inquiry">
+                                                <iconify-icon icon="lucide:trash-2" class="text-sm"></iconify-icon>
+                                            </button>
+                                        </form>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -498,12 +437,13 @@ try {
                             <th class="py-3.5 px-4">Date &amp; Time</th>
                             <th class="py-3.5 px-4">Meeting Format</th>
                             <th class="py-3.5 px-4">Status</th>
+                            <th class="py-3.5 px-4 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-[rgba(19,34,75,0.06)]">
                         <?php if (empty($bookings)): ?>
                             <tr>
-                                <td colspan="7" class="py-8 text-center text-xs text-[#8890AA]">No consultations booked yet.</td>
+                                <td colspan="8" class="py-8 text-center text-xs text-[#8890AA]">No consultations booked yet.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($bookings as $b): ?>
@@ -522,6 +462,38 @@ try {
                                     <td class="py-4 px-4 text-[#4b4b4b]"><?= htmlspecialchars($b['format'] ?? 'Google Meet') ?></td>
                                     <td class="py-4 px-4">
                                         <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#DFF6E8] text-[#127A45] uppercase tracking-wider"><?= htmlspecialchars($b['status'] ?? 'confirmed') ?></span>
+                                    </td>
+                                    <td class="py-4 px-4 text-right whitespace-nowrap space-x-1">
+                                        <?php if (($b['status'] ?? '') !== 'confirmed'): ?>
+                                            <form method="POST" action="admin-dashboard.php" class="inline">
+                                                <?= csrf_input() ?>
+                                                <input type="hidden" name="action" value="update_booking_status">
+                                                <input type="hidden" name="booking_id" value="<?= (int)$b['id'] ?>">
+                                                <input type="hidden" name="status" value="confirmed">
+                                                <button type="submit" class="px-2 py-1 rounded bg-[#DDEBFF] text-[#4C6CCB] text-[10px] font-bold hover:bg-[#c9ddff]" title="Confirm Booking">
+                                                    Confirm
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+                                        <?php if (($b['status'] ?? '') !== 'completed'): ?>
+                                            <form method="POST" action="admin-dashboard.php" class="inline">
+                                                <?= csrf_input() ?>
+                                                <input type="hidden" name="action" value="update_booking_status">
+                                                <input type="hidden" name="booking_id" value="<?= (int)$b['id'] ?>">
+                                                <input type="hidden" name="status" value="completed">
+                                                <button type="submit" class="px-2 py-1 rounded bg-[#DFF6E8] text-[#127A45] text-[10px] font-bold hover:bg-[#c7f3d8]" title="Mark Completed">
+                                                    Complete
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+                                        <form method="POST" action="admin-dashboard.php" onsubmit="return confirm('Are you sure you want to cancel and delete this booking?');" class="inline">
+                                            <?= csrf_input() ?>
+                                            <input type="hidden" name="action" value="delete_booking">
+                                            <input type="hidden" name="booking_id" value="<?= (int)$b['id'] ?>">
+                                            <button type="submit" class="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-50" title="Delete Booking">
+                                                <iconify-icon icon="lucide:trash-2" class="text-sm"></iconify-icon>
+                                            </button>
+                                        </form>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -568,13 +540,62 @@ try {
 
                             <div class="pt-3 border-t border-[rgba(19,34,75,0.06)] flex justify-between items-center">
                                 <span class="text-sm font-extrabold text-[#13224B]"><?= htmlspecialchars($p['budget'] ?: '$150,000') ?></span>
-                                <a href="admin-project.php?id=<?= (int)$p['id'] ?>" class="px-3.5 py-1.5 rounded-lg bg-white border border-[rgba(19,34,75,0.1)] text-xs font-bold text-[#4C6CCB] hover:bg-[#DDEBFF] transition-colors">
+                                <a href="admin/project-detail.php?id=<?= (int)$p['id'] ?>" class="px-3.5 py-1.5 rounded-lg bg-white border border-[rgba(19,34,75,0.1)] text-xs font-bold text-[#4C6CCB] hover:bg-[#DDEBFF] transition-colors">
                                     Control Panel &rarr;
                                 </a>
                             </div>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Section 4: Registered Clients Directory -->
+        <div class="admin-card p-6 sm:p-8" id="clients">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="text-lg font-bold text-[#13224B]">Registered Client Accounts</h2>
+                    <p class="text-xs text-[#8890AA] mt-0.5">Directory of client accounts registered in the client portal and their projects.</p>
+                </div>
+                <span class="text-xs text-[#8890AA]"><?= count($clients) ?> Clients</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="border-b border-[rgba(19,34,75,0.08)] text-[#8890AA] uppercase tracking-wider font-bold">
+                            <th class="py-3.5 px-4">Client Name</th>
+                            <th class="py-3.5 px-4">Email</th>
+                            <th class="py-3.5 px-4">Company</th>
+                            <th class="py-3.5 px-4">Active Projects</th>
+                            <th class="py-3.5 px-4">Member Since</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[rgba(19,34,75,0.06)]">
+                        <?php if (empty($clients)): ?>
+                            <tr>
+                                <td colspan="5" class="py-8 text-center text-xs text-[#8890AA]">No client accounts registered yet.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($clients as $cl): ?>
+                                <tr class="hover:bg-[#F4F6F8] transition-colors">
+                                    <td class="py-4 px-4 font-bold text-[#13224B]">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-7 h-7 rounded-full bg-gradient-to-r from-[#4C6CCB] to-[#6C5BB5] text-white font-bold flex items-center justify-center text-[10px]">
+                                                <?= strtoupper(substr($cl['name'], 0, 1)) ?>
+                                            </div>
+                                            <span><?= htmlspecialchars($cl['name']) ?></span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-[#4b4b4b]"><?= htmlspecialchars($cl['email']) ?></td>
+                                    <td class="py-4 px-4 text-[#6C5BB5] font-semibold"><?= htmlspecialchars($cl['company'] ?: '—') ?></td>
+                                    <td class="py-4 px-4 font-bold text-[#4C6CCB]"><?= (int)($cl['project_count'] ?? 0) ?></td>
+                                    <td class="py-4 px-4 text-[#8890AA]"><?= date('M j, Y', strtotime($cl['created_at'])) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
     </main>
@@ -635,19 +656,33 @@ try {
                     </button>
                 </div>
                 
-                <form id="convertProjectForm" method="POST" action="admin-dashboard.php" onsubmit="handleConvertSubmit(event)">
-                    <input type="hidden" name="action" value="convert_to_project">
-                    <input type="hidden" name="inquiry_id" id="convertInquiryIdInput" value="">
-                    <button type="submit" id="convertSubmitBtn" class="px-6 py-2.5 rounded-xl text-white text-xs font-bold shadow-md hover:scale-105 transition-transform" style="background:var(--grad);">
-                        Convert to Active Project &rarr;
-                    </button>
-                </form>
+                <div class="flex items-center gap-2">
+                    <form id="convertProjectForm" method="POST" action="admin-dashboard.php">
+                        <?= csrf_input() ?>
+                        <input type="hidden" name="action" value="convert_to_project">
+                        <input type="hidden" name="inquiry_id" id="convertInquiryIdInput" value="">
+                        <button type="submit" id="convertSubmitBtn" class="px-6 py-2.5 rounded-xl text-white text-xs font-bold shadow-md hover:scale-105 transition-transform" style="background:var(--grad);">
+                            Convert to Active Project &rarr;
+                        </button>
+                    </form>
+
+                    <form id="modalDeleteInquiryForm" method="POST" action="admin-dashboard.php" onsubmit="return confirm('Are you sure you want to permanently delete this inquiry?');">
+                        <?= csrf_input() ?>
+                        <input type="hidden" name="action" value="delete_inquiry">
+                        <input type="hidden" name="inquiry_id" id="modalDeleteInquiryIdInput" value="">
+                        <button type="submit" class="px-4 py-2.5 rounded-xl border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 inline-flex items-center gap-1.5 transition-colors">
+                            <iconify-icon icon="lucide:trash-2"></iconify-icon>
+                            <span>Delete Lead</span>
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- Hidden Form for Status Updates -->
     <form id="statusUpdateForm" method="POST" action="admin-dashboard.php" class="hidden">
+        <?= csrf_input() ?>
         <input type="hidden" name="action" value="update_status">
         <input type="hidden" name="inquiry_id" id="statusInquiryIdInput" value="">
         <input type="hidden" name="status" id="statusValueInput" value="">
@@ -668,6 +703,8 @@ try {
             if (!inq) return;
 
             document.getElementById('convertInquiryIdInput').value = inq.id;
+            const delInp = document.getElementById('modalDeleteInquiryIdInput');
+            if (delInp) delInp.value = inq.id;
             document.getElementById('modalInqId').innerText = inq.ref_code || ('INQ-' + inq.id);
             document.getElementById('modalInqName').innerText = inq.name;
             document.getElementById('modalInqCompany').innerText = `${inq.company || 'Direct Client'} · ${inq.email}`;

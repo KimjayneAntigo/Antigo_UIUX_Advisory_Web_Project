@@ -40,6 +40,11 @@ $pageSubheading = htmlspecialchars($project['title'], ENT_QUOTES, 'UTF-8');
 
 //  POST Handler Client Message Submission 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+        set_flash('error', 'Invalid security token. Please try again.');
+        safe_redirect("project-detail.php?id={$projectId}");
+    }
+
     $action = trim($_POST['action'] ?? '');
 
     if ($action === 'send_message') {
@@ -366,6 +371,7 @@ $stageIndex = match($currentPhase) {
             <!-- Message Form -->
             <form method="POST" action="project-detail.php?id=<?= $projectId ?>" class="space-y-3">
               <input type="hidden" name="action" value="send_message">
+              <?= csrf_input() ?>
               <div>
                 <textarea name="message" rows="3" required placeholder="Type your message, feedback, or question for the designer…"
                           class="input-field w-full px-4 py-3 rounded-2xl text-xs font-medium resize-none"></textarea>

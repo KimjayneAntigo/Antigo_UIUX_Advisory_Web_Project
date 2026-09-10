@@ -13,6 +13,12 @@ require_once __DIR__ . '/includes/routing.php';
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css?v=2.0">
 <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+<script>
+  (function() {
+    const saved = localStorage.getItem('antigo_theme') || 'light';
+    document.documentElement.dataset.theme = saved;
+  })();
+</script>
 </head>
 <body>
 
@@ -363,14 +369,33 @@ require_once __DIR__ . '/includes/routing.php';
   </div>
 </footer>
 
-<script src="js/app-data.js"></script>
 <script>
+  // theme toggle with localStorage persistence
   const toggle = document.getElementById('themeToggle');
-  toggle.addEventListener('click', () => {
-    const root = document.documentElement;
-    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
-  });
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      const root = document.documentElement;
+      const nextTheme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = nextTheme;
+      localStorage.setItem('antigo_theme', nextTheme);
+    });
+  }
 
+  // mobile navigation drawer toggle
+  const burger = document.querySelector('.burger');
+  const navLinks = document.querySelector('.nav-links');
+  if (burger && navLinks) {
+    burger.addEventListener('click', () => {
+      navLinks.classList.toggle('nav-open');
+    });
+    navLinks.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        navLinks.classList.remove('nav-open');
+      });
+    });
+  }
+
+  // reveal skill bars when scrolled into view
   const bars = document.querySelectorAll('.skill-bar');
   const io = new IntersectionObserver((entries) => {
     entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in-view'); });

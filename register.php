@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/routing.php';
+require_once __DIR__ . '/includes/functions.php';
 
 // Already authenticated
 if (is_logged_in()) {
@@ -33,10 +34,13 @@ $error = '';
 
 // POST HANDLER
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name     = trim($_POST['name']     ?? '');
-    $email    = trim($_POST['email']    ?? '');
-    $password =      $_POST['password'] ?? '';
-    $confirm  =      $_POST['confirm']  ?? '';
+    if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+        $error = 'Invalid security token. Please refresh and try again.';
+    } else {
+        $name     = trim($_POST['name']     ?? '');
+        $email    = trim($_POST['email']    ?? '');
+        $password =      $_POST['password'] ?? '';
+        $confirm  =      $_POST['confirm']  ?? '';
 
     // VALIDATION
     if (empty($name) || empty($email) || empty($password) || empty($confirm)) {
@@ -97,6 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         header('Location: client/dashboard.php?welcome=1');
         exit;
+    }
     }
 }
 ?>
@@ -288,6 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endif; ?>
 
                     <form method="POST" action="register.php" class="space-y-5" novalidate>
+                        <?= csrf_input() ?>
 
                         <!-- Full Name -->
                         <div>

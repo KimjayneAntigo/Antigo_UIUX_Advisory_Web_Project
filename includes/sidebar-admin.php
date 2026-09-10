@@ -20,9 +20,9 @@ $navItems = [
     ['Overview',   'lucide:layout-dashboard', $base . 'admin-dashboard.php', 'overview'],
     ['Inquiries',  'lucide:mail',             $base . 'admin/inquiries.php', 'inquiries'],
     ['Bookings',   'lucide:calendar-check',   $base . 'admin-dashboard.php#bookings', 'bookings'],
-    ['Projects',   'lucide:folder-kanban',    $base . 'admin/project-detail.php?id=1', 'projects'],
+    ['Projects',   'lucide:folder-kanban',    $base . 'admin-dashboard.php#projects', 'projects'],
     ['Clients',    'lucide:users',            $base . 'admin-dashboard.php#clients',  'clients'],
-    ['Settings',   'lucide:settings-2',       '#',                           'settings'],
+    ['Settings',   'lucide:settings-2',       $base . 'admin-dashboard.php#settings', 'settings'],
 ];
 ?>
 <aside class="sidebar">

@@ -22,6 +22,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// CSRF check
+if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'Security validation failed. Please refresh the page.']);
+    exit;
+}
+
 // Input collection
 $name        = trim($_POST['name']        ?? '');
 $email       = trim($_POST['email']       ?? '');
@@ -124,6 +131,33 @@ if (!empty($_FILES['file']['name'])) {
         exit;
     }
 
+    // Inspect actual MIME type
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime  = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+
+    $allowedMimes = [
+        'application/pdf',
+        'image/png',
+        'image/jpeg',
+        'application/zip',
+        'application/x-zip-compressed',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
+        'application/octet-stream',
+        'text/plain',
+    ];
+
+    if (!in_array($mime, $allowedMimes, true)) {
+        http_response_code(422);
+        echo json_encode([
+            'success'      => false,
+            'field_errors' => ['file' => 'File content type not permitted.'],
+            'error'        => 'Invalid file content.',
+        ]);
+        exit;
+    }
+
     $uploadDir = __DIR__ . '/uploads/inquiries/';
     if (!is_dir($uploadDir)) {
         mkdir($uploadDir, 0755, true);
@@ -141,15 +175,15 @@ if (!empty($_FILES['file']['name'])) {
     }
 }
 
-// Sanitization for storage
-$sanitizedName        = sanitize_input($name);
-$sanitizedEmail       = sanitize_input($email);
-$sanitizedPhone       = sanitize_input($phone);
-$sanitizedCompany     = sanitize_input($company);
-$sanitizedProjectType = sanitize_input($projectType);
-$sanitizedBudget      = str_replace('₱', '$', sanitize_input($budget));
-$sanitizedTimeline    = sanitize_input($timeline);
-$sanitizedDescription = sanitize_input($description);
+// Normalized input for PDO storage (avoiding double-HTML encoding)
+$dbName        = $name;
+$dbEmail       = $email;
+$dbPhone       = $phone;
+$dbCompany     = $company;
+$dbProjectType = $projectType;
+$dbBudget      = str_replace('₱', '$', $budget);
+$dbTimeline    = $timeline;
+$dbDescription = $description;
 
 try {
     $pdo->beginTransaction();
@@ -164,14 +198,14 @@ try {
 
     $stmt->execute([
         $user_id,
-        $sanitizedName,
-        $sanitizedEmail,
-        $sanitizedPhone,
-        $sanitizedCompany ?: null,
-        $sanitizedProjectType,
-        $sanitizedBudget,
-        $sanitizedTimeline,
-        $sanitizedDescription,
+        $dbName,
+        $dbEmail,
+        $dbPhone,
+        $dbCompany ?: null,
+        $dbProjectType,
+        $dbBudget,
+        $dbTimeline,
+        $dbDescription,
         $storedFileName,
     ]);
 

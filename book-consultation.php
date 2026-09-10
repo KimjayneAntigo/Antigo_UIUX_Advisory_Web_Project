@@ -6,6 +6,19 @@ require_once __DIR__ . '/includes/functions.php';
 $is_client_user = is_logged_in();
 $session_name   = $_SESSION['user_name'] ?? $_SESSION['name'] ?? '';
 $session_email  = $_SESSION['email'] ?? '';
+
+// Pre-query inquiry details from database if passed via query string
+$inquiry_id_param = isset($_GET['inquiry_id']) ? (int)$_GET['inquiry_id'] : 0;
+$inquiry_row = null;
+if ($inquiry_id_param > 0) {
+    try {
+        $iStmt = $pdo->prepare('SELECT * FROM inquiries WHERE id = ? LIMIT 1');
+        $iStmt->execute([$inquiry_id_param]);
+        $inquiry_row = $iStmt->fetch() ?: null;
+    } catch (\PDOException $e) {
+        error_log('book-consultation inquiry lookup error: ' . $e->getMessage());
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -774,13 +787,12 @@ $session_email  = $_SESSION['email'] ?? '';
         </div>
     </footer>
 
-    <script src="js/app-data.js"></script>
     <script>
         // State
         let bookingState = {
             inquiryId: null,
-            clientName: 'Maria Santos',
-            clientEmail: 'maria@pesolink.com',
+            clientName: '',
+            clientEmail: '',
             service: 'UI Design',
             duration: '60 min',
             price: '$450.00',
@@ -792,15 +804,25 @@ $session_email  = $_SESSION['email'] ?? '';
             format: 'Video Call (Google Meet)'
         };
 
-        // Initialize from URL / Session / LocalStorage
+        // Initialize from URL / Session / Database
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const inquiryId = urlParams.get('inquiry_id');
             const isClientLoggedIn = <?= json_encode($is_client_user) ?>;
             const sessionClientName = <?= json_encode($session_name) ?>;
             const sessionClientEmail = <?= json_encode($session_email) ?>;
-            
-            if (inquiryId) {
+            const dbInquiry = <?= json_encode($inquiry_row, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+
+            if (dbInquiry) {
+                bookingState.inquiryId = dbInquiry.id;
+                bookingState.clientName = dbInquiry.name || '';
+                bookingState.clientEmail = dbInquiry.email || '';
+                if (dbInquiry.service || dbInquiry.project_type) {
+                    bookingState.service = dbInquiry.service || dbInquiry.project_type;
+                }
+                document.getElementById('leadBadgeText').innerText = `${bookingState.clientName} (Inquiry)`;
+                document.getElementById('leadBadge').classList.remove('hidden');
+            } else if (inquiryId) {
                 const urlName = urlParams.get('name');
                 const urlEmail = urlParams.get('email');
                 const urlService = urlParams.get('service');
@@ -809,31 +831,16 @@ $session_email  = $_SESSION['email'] ?? '';
                 if (urlEmail) bookingState.clientEmail = urlEmail;
                 if (urlService) bookingState.service = urlService;
 
-                const inq = AntigoData.getInquiry(inquiryId);
-                if (inq) {
-                    if (!urlName) bookingState.clientName = inq.name;
-                    if (!urlEmail) bookingState.clientEmail = inq.email;
-                    if (!urlService && inq.projectType) bookingState.service = inq.projectType;
-                }
-                document.getElementById('leadBadgeText').innerText = `${bookingState.clientName} (Inquiry)`;
+                document.getElementById('leadBadgeText').innerText = `${bookingState.clientName || 'Lead'} (Inquiry)`;
                 document.getElementById('leadBadge').classList.remove('hidden');
-            } else if (isClientLoggedIn) {
+            } else if (isClientLoggedIn && sessionClientName) {
                 bookingState.clientName = sessionClientName;
                 bookingState.clientEmail = sessionClientEmail;
                 document.getElementById('leadBadgeText').innerText = `${sessionClientName} (Client)`;
                 document.getElementById('leadBadge').classList.remove('hidden');
             } else {
-                // Check if client is logged in
-                const user = AntigoData.getCurrentUser();
-                if (user && user.role === 'client') {
-                    bookingState.clientName = user.name;
-                    bookingState.clientEmail = user.email;
-                    document.getElementById('leadBadgeText').innerText = `${user.name}`;
-                    document.getElementById('leadBadge').classList.remove('hidden');
-                } else {
-                    // Show cold visitor fields
-                    document.getElementById('inlineLeadFields').classList.remove('hidden');
-                }
+                // Show cold visitor fields
+                document.getElementById('inlineLeadFields').classList.remove('hidden');
             }
 
             // Select default service matching project type
@@ -991,6 +998,7 @@ $session_email  = $_SESSION['email'] ?? '';
             body.append('date',        bookingState.dateRaw);
             body.append('time',        bookingState.time);
             body.append('format',      bookingState.format);
+            body.append('csrf_token',  <?= json_encode(generate_csrf_token()) ?>);
             if (bookingState.inquiryId) body.append('inquiry_id', bookingState.inquiryId);
 
             try {
