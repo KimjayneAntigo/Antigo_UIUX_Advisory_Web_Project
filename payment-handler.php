@@ -56,7 +56,13 @@ try {
         exit;
     }
 
-    // 3. Status check: Project must be completed and final invoice issued by studio
+    // 3. Status check: Reject cancelled projects or incomplete/uninvoiced projects
+    if (($project['status_type'] ?? '') === 'cancelled') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'This project has been cancelled and is no longer payable.']);
+        exit;
+    }
+
     if (($project['status_type'] ?? '') !== 'completed' || empty($project['invoice_sent_at'])) {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => "Payment isn't available until the studio sends your final invoice."]);

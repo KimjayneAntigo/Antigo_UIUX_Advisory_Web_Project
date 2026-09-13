@@ -19,7 +19,13 @@ if ($userId <= 0 || $projectId <= 0) {
 
 //  IDOR Ownership Check 
 try {
-    $stmt = $pdo->prepare('SELECT * FROM projects WHERE id = ? AND user_id = ? LIMIT 1');
+    $stmt = $pdo->prepare(
+        'SELECT p.*, cb.name AS canceller_name, cb.role AS canceller_role
+         FROM projects p
+         LEFT JOIN users cb ON p.cancelled_by = cb.id
+         WHERE p.id = ? AND p.user_id = ?
+         LIMIT 1'
+    );
     $stmt->execute([$projectId, $userId]);
     $project = $stmt->fetch();
 } catch (\PDOException $e) {
@@ -42,6 +48,12 @@ $pageSubheading = htmlspecialchars($project['title'], ENT_QUOTES, 'UTF-8');
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
         set_flash('error', 'Invalid security token. Please try again.');
+        safe_redirect("project-detail.php?id={$projectId}");
+    }
+
+    // Server-side guard: Cancelled projects are strictly read-only
+    if (($project['status_type'] ?? '') === 'cancelled') {
+        set_flash('error', 'This project has been cancelled and is read-only.');
         safe_redirect("project-detail.php?id={$projectId}");
     }
 
@@ -216,11 +228,46 @@ $stageIndex = match($currentPhase) {
 
         <div class="flex items-center gap-3">
           <?= status_badge($project['status']) ?>
+          <?php if (!in_array($project['status_type'] ?? '', ['completed', 'cancelled'], true)): ?>
+            <button type="button" onclick="openCancelModal()"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-all">
+              <iconify-icon icon="lucide:ban" class="text-sm"></iconify-icon>
+              <span>Cancel Project</span>
+            </button>
+          <?php endif; ?>
         </div>
       </div>
 
       <!-- Flash Notification -->
       <?= render_flash() ?>
+
+      <!-- Cancelled Project Notice Banner -->
+      <?php if (($project['status_type'] ?? '') === 'cancelled'): ?>
+        <div class="p-5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 shadow-sm flex items-start gap-3.5">
+          <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0 text-xl">
+            <iconify-icon icon="lucide:ban"></iconify-icon>
+          </div>
+          <div class="space-y-1.5 flex-1">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h3 class="text-sm font-extrabold text-rose-950">
+                This project was cancelled on <?= date('M j, Y \a\t g:i A', strtotime($project['cancelled_at'] ?? $project['updated_at'])) ?>
+              </h3>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-200/80 text-rose-900">
+                Project Cancelled
+              </span>
+            </div>
+            <p class="text-xs text-rose-800">
+              Cancelled by: <strong><?= htmlspecialchars($project['canceller_name'] ?? 'Authorized User', ENT_QUOTES, 'UTF-8') ?></strong> (<?= ucfirst($project['canceller_role'] ?? 'user') ?>)
+              <?php if (!empty($project['cancellation_reason'])): ?>
+                &mdash; Reason: <em>"<?= htmlspecialchars($project['cancellation_reason'], ENT_QUOTES, 'UTF-8') ?>"</em>
+              <?php endif; ?>
+            </p>
+            <p class="text-[11px] text-rose-700/90 pt-0.5">
+              This workspace is preserved in read-only mode for your records. All messages and deliverable history remain accessible, but new messages, file uploads, and settlements are permanently disabled.
+            </p>
+          </div>
+        </div>
+      <?php endif; ?>
 
       <!-- ── MILESTONE STEPPER (Discover / Define / Design / Deliver) ───── -->
       <div class="card p-6 sm:p-8 border border-[rgba(19,34,75,0.08)]">
@@ -377,6 +424,12 @@ $stageIndex = match($currentPhase) {
             </div>
 
             <!-- Message Form -->
+            <?php if (($project['status_type'] ?? '') === 'cancelled'): ?>
+              <div class="p-4 rounded-2xl bg-gray-50 border border-gray-200 text-gray-500 text-xs text-center flex items-center justify-center gap-2">
+                <iconify-icon icon="lucide:lock" class="text-sm"></iconify-icon>
+                <span>Messaging is closed for this project because it has been cancelled.</span>
+              </div>
+            <?php else: ?>
             <form method="POST" action="project-detail.php?id=<?= $projectId ?>" class="space-y-3">
               <input type="hidden" name="action" value="send_message">
               <?= csrf_input() ?>
@@ -393,6 +446,7 @@ $stageIndex = match($currentPhase) {
                 </button>
               </div>
             </form>
+            <?php endif; ?>
           </div>
 
         </div>
@@ -759,5 +813,57 @@ $stageIndex = match($currentPhase) {
       });
     }
   </script>
+  <!-- Cancellation Modal -->
+  <?php if (!in_array($project['status_type'] ?? '', ['completed', 'cancelled'], true)): ?>
+  <div id="cancelModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="card max-w-md w-full p-6 space-y-4 shadow-2xl bg-white border border-rose-100">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0 text-xl">
+          <iconify-icon icon="lucide:alert-triangle"></iconify-icon>
+        </div>
+        <div class="space-y-1 flex-1">
+          <h3 class="text-base font-bold text-[#13224B]">Cancel Project</h3>
+          <p class="text-xs text-[#555E7B] leading-relaxed">
+            Are you sure you want to cancel <strong><?= htmlspecialchars($project['title'], ENT_QUOTES, 'UTF-8') ?></strong>? This will stop all active advisory sprints and lock the project workspace.
+          </p>
+        </div>
+      </div>
+
+      <form method="POST" action="../cancel-project-handler.php" class="space-y-3 pt-2">
+        <?= csrf_input() ?>
+        <input type="hidden" name="project_id" value="<?= $projectId ?>">
+        <input type="hidden" name="return_to" value="client/project-detail.php?id=<?= $projectId ?>">
+
+        <div>
+          <label class="block text-xs font-bold text-[#13224B] mb-1">Cancellation Reason <span class="text-xs font-normal text-[#8890AA]">(Optional)</span></label>
+          <textarea name="cancellation_reason" rows="3" maxlength="500" placeholder="Please let the studio know why you are cancelling this project…"
+                    class="input-field w-full px-3.5 py-2.5 rounded-xl text-xs font-medium resize-none border border-[rgba(19,34,75,0.15)] focus:outline-none focus:border-rose-400"></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-2.5 pt-2">
+          <button type="button" onclick="closeCancelModal()"
+                  class="px-4 py-2 rounded-xl text-xs font-bold text-[#555E7B] hover:bg-gray-100 transition-colors">
+            Keep Project
+          </button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow transition-colors inline-flex items-center gap-1.5">
+            <iconify-icon icon="lucide:ban" class="text-sm"></iconify-icon>
+            <span>Confirm Cancellation</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script>
+    function openCancelModal() {
+      const m = document.getElementById('cancelModal');
+      if (m) m.classList.remove('hidden');
+    }
+    function closeCancelModal() {
+      const m = document.getElementById('cancelModal');
+      if (m) m.classList.add('hidden');
+    }
+  </script>
+  <?php endif; ?>
 </body>
 </html>

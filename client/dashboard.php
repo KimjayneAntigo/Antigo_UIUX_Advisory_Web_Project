@@ -110,8 +110,8 @@ try {
         $currentUserProfile = $uData;
     }
 
-    // Active Projects Count
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM projects WHERE user_id = :uid AND status_type != 'completed'");
+    // Active Projects Count (Excludes completed and cancelled)
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM projects WHERE user_id = :uid AND status_type NOT IN ('completed', 'cancelled')");
     $stmt->execute(['uid' => $userId]);
     $activeProjectsCount = (int) $stmt->fetchColumn();
 
@@ -135,14 +135,16 @@ try {
     $stmt->execute(['uid' => $userId]);
     $messagesCount = (int) $stmt->fetchColumn();
 
-    // Active Projects List
+    // Client Projects (Separated into Active vs Cancelled)
     $stmt = $pdo->prepare(
         'SELECT * FROM projects
          WHERE user_id = :uid
          ORDER BY updated_at DESC'
     );
     $stmt->execute(['uid' => $userId]);
-    $projects = $stmt->fetchAll();
+    $allClientProjects = $stmt->fetchAll();
+    $projects = array_values(array_filter($allClientProjects, fn($p) => ($p['status_type'] ?? '') !== 'cancelled'));
+    $cancelledProjects = array_values(array_filter($allClientProjects, fn($p) => ($p['status_type'] ?? '') === 'cancelled'));
 
     // Pending Review Inquiries (Live intake list for this client)
     $stmtInq = $pdo->prepare(
@@ -485,6 +487,41 @@ try {
                   </div>
                 </a>
               <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+
+          <!-- Cancelled Projects Section -->
+          <?php if (!empty($cancelledProjects)): ?>
+            <div class="space-y-3 pt-4 border-t border-[rgba(19,34,75,0.08)]">
+              <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-600">
+                <iconify-icon icon="lucide:ban" class="text-sm"></iconify-icon>
+                <span>Cancelled Projects (<?= count($cancelledProjects) ?>)</span>
+              </div>
+              <div class="space-y-3">
+                <?php foreach ($cancelledProjects as $cp): ?>
+                  <a href="project-detail.php?id=<?= (int)$cp['id'] ?>"
+                     class="card p-5 block border border-rose-200/80 bg-rose-50/20 rounded-2xl project-card transition-all group opacity-90 hover:opacity-100">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                      <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded bg-gray-200 font-mono text-[10px] font-bold text-gray-700">
+                          <?= htmlspecialchars($cp['project_code'], ENT_QUOTES, 'UTF-8') ?>
+                        </span>
+                        <h4 class="text-sm font-bold text-[#13224B] group-hover:text-rose-600 transition-colors">
+                          <?= htmlspecialchars($cp['title'], ENT_QUOTES, 'UTF-8') ?>
+                        </h4>
+                      </div>
+                      <div>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                          Cancelled
+                        </span>
+                      </div>
+                    </div>
+                    <p class="text-xs text-[#8890AA]">
+                      Cancelled on <?= date('M j, Y', strtotime($cp['cancelled_at'] ?? $cp['updated_at'])) ?> &middot; Click to view read-only history
+                    </p>
+                  </a>
+                <?php endforeach; ?>
+              </div>
             </div>
           <?php endif; ?>
         </div>

@@ -24,7 +24,13 @@ if ($rawId === '') {
 }
 
 try {
-    $stmt = $pdo->prepare('SELECT * FROM projects WHERE id = ? OR project_code = ? LIMIT 1');
+    $stmt = $pdo->prepare(
+        'SELECT p.*, cb.name AS canceller_name, cb.role AS canceller_role
+         FROM projects p
+         LEFT JOIN users cb ON p.cancelled_by = cb.id
+         WHERE p.id = ? OR p.project_code = ?
+         LIMIT 1'
+    );
     $stmt->execute([is_numeric($rawId) ? (int) $rawId : 0, $rawId]);
     $project = $stmt->fetch();
 } catch (\PDOException $e) {
@@ -44,6 +50,12 @@ $projectId = (int) $project['id'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
         set_flash('error', 'Invalid or expired security token. Please try again.');
+        safe_redirect("project-detail.php?id={$projectId}");
+    }
+
+    // Server-side guard: Cancelled projects are strictly read-only
+    if (($project['status_type'] ?? '') === 'cancelled') {
+        set_flash('error', 'This project has been cancelled and is read-only.');
         safe_redirect("project-detail.php?id={$projectId}");
     }
 
@@ -564,107 +576,132 @@ function file_icon(string $name): string
 
         <!-- action buttons -->
         <div class="flex items-center gap-2 flex-shrink-0">
-            <!-- Mark Complete (Only visible if not already completed) -->
-            <?php if (($project['status_type'] ?? '') !== 'completed'): ?>
-            <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
-                  onsubmit="return confirm('Archive this project? This marks it as Completed.');">
-                <?= csrf_input() ?>
-                <input type="hidden" name="action" value="archive">
-                <button type="submit"
-                        class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#DFF6E8]/20 border border-[#DFF6E8]/30 text-[#DFF6E8] text-xs font-bold hover:bg-[#DFF6E8]/30 transition-all">
-                    <iconify-icon icon="lucide:check-circle-2" class="text-base"></iconify-icon>
-                    Mark Complete
-                </button>
-            </form>
-            <?php endif; ?>
-
-            <!-- Payment Status / Send Invoice action -->
-            <?php if ($projectPayment): ?>
-                <?php
-                    $payRef = format_payment_ref((int)$projectPayment['id']);
-                    $pSt = $projectPayment['status'];
-                ?>
-                <a href="payments.php?status=<?= urlencode($pSt) ?>"
-                   title="Payment <?= $payRef ?> (<?= ucfirst($pSt) ?>) — Click to review in Payments Hub"
-                   class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all <?= $pSt === 'verified' ? 'bg-[#DFF6E8]/30 border-[#DFF6E8]/50 text-[#DFF6E8] hover:bg-[#DFF6E8]/40' : ($pSt === 'rejected' ? 'bg-red-500/20 border-red-400/40 text-red-200 hover:bg-red-500/30' : 'bg-amber-400/20 border-amber-300/40 text-amber-200 hover:bg-amber-400/30 animate-pulse') ?>">
-                    <iconify-icon icon="<?= $pSt === 'verified' ? 'lucide:check-circle' : ($pSt === 'rejected' ? 'lucide:x-circle' : 'lucide:hourglass') ?>" class="text-base"></iconify-icon>
-                    <span><?= $pSt === 'verified' ? "Paid: {$payRef}" : ($pSt === 'rejected' ? "Rejected: {$payRef}" : "Pending: {$payRef}") ?></span>
-                </a>
-            <?php elseif (!empty($project['invoice_sent_at'])): ?>
-                <!-- Invoice Sent Indicator -->
-                <span class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-200 text-xs font-bold"
-                      title="Invoice was sent on <?= date('M j, Y g:i A', strtotime($project['invoice_sent_at'])) ?>">
-                    <iconify-icon icon="lucide:check-check" class="text-base text-purple-300"></iconify-icon>
-                    <span>Invoice sent <?= date('M j, Y', strtotime($project['invoice_sent_at'])) ?></span>
+            <?php if (($project['status_type'] ?? '') === 'cancelled'): ?>
+                <span class="px-3.5 py-2 rounded-xl bg-rose-500/20 border border-rose-400/30 text-rose-200 text-xs font-bold flex items-center gap-1.5">
+                    <iconify-icon icon="lucide:ban" class="text-base text-rose-300"></iconify-icon>
+                    <span>Project Cancelled</span>
                 </span>
-            <?php elseif (($project['status_type'] ?? '') === 'completed'): ?>
-                <!-- Send Invoice Action (Active) -->
+            <?php else: ?>
+                <!-- Mark Complete (Only visible if not already completed) -->
+                <?php if (($project['status_type'] ?? '') !== 'completed'): ?>
                 <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
-                      onsubmit="return confirm('Send final invoice to client? This unlocks payment on their portal.');">
+                      onsubmit="return confirm('Archive this project? This marks it as Completed.');">
                     <?= csrf_input() ?>
-                    <input type="hidden" name="action" value="send_invoice">
+                    <input type="hidden" name="action" value="archive">
                     <button type="submit"
-                            class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 border border-blue-400/30 text-white text-xs font-bold hover:bg-blue-500 transition-all shadow-sm">
+                            class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#DFF6E8]/20 border border-[#DFF6E8]/30 text-[#DFF6E8] text-xs font-bold hover:bg-[#DFF6E8]/30 transition-all">
+                        <iconify-icon icon="lucide:check-circle-2" class="text-base"></iconify-icon>
+                        Mark Complete
+                    </button>
+                </form>
+                <?php endif; ?>
+
+                <!-- Payment Status / Send Invoice action -->
+                <?php if ($projectPayment): ?>
+                    <?php
+                        $payRef = format_payment_ref((int)$projectPayment['id']);
+                        $pSt = $projectPayment['status'];
+                    ?>
+                    <a href="payments.php?status=<?= urlencode($pSt) ?>"
+                       title="Payment <?= $payRef ?> (<?= ucfirst($pSt) ?>) — Click to review in Payments Hub"
+                       class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all <?= $pSt === 'verified' ? 'bg-[#DFF6E8]/30 border-[#DFF6E8]/50 text-[#DFF6E8] hover:bg-[#DFF6E8]/40' : ($pSt === 'rejected' ? 'bg-red-500/20 border-red-400/40 text-red-200 hover:bg-red-500/30' : 'bg-amber-400/20 border-amber-300/40 text-amber-200 hover:bg-amber-400/30 animate-pulse') ?>">
+                        <iconify-icon icon="<?= $pSt === 'verified' ? 'lucide:check-circle' : ($pSt === 'rejected' ? 'lucide:x-circle' : 'lucide:hourglass') ?>" class="text-base"></iconify-icon>
+                        <span><?= $pSt === 'verified' ? "Paid: {$payRef}" : ($pSt === 'rejected' ? "Rejected: {$payRef}" : "Pending: {$payRef}") ?></span>
+                    </a>
+                <?php elseif (!empty($project['invoice_sent_at'])): ?>
+                    <!-- Invoice Sent Indicator -->
+                    <span class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-200 text-xs font-bold"
+                          title="Invoice was sent on <?= date('M j, Y g:i A', strtotime($project['invoice_sent_at'])) ?>">
+                        <iconify-icon icon="lucide:check-check" class="text-base text-purple-300"></iconify-icon>
+                        <span>Invoice sent <?= date('M j, Y', strtotime($project['invoice_sent_at'])) ?></span>
+                    </span>
+                <?php elseif (($project['status_type'] ?? '') === 'completed'): ?>
+                    <!-- Send Invoice Action (Active) -->
+                    <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
+                          onsubmit="return confirm('Send final invoice to client? This unlocks payment on their portal.');">
+                        <?= csrf_input() ?>
+                        <input type="hidden" name="action" value="send_invoice">
+                        <button type="submit"
+                                class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 border border-blue-400/30 text-white text-xs font-bold hover:bg-blue-500 transition-all shadow-sm">
+                            <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
+                            Send Invoice
+                        </button>
+                    </form>
+                <?php else: ?>
+                    <!-- Send Invoice Action (Disabled until completed) -->
+                    <button type="button"
+                            disabled
+                            title="Available once project is marked complete"
+                            class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-white/40 text-xs font-bold cursor-not-allowed">
                         <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
                         Send Invoice
                     </button>
-                </form>
-            <?php else: ?>
-                <!-- Send Invoice Action (Disabled until completed) -->
-                <button type="button"
-                        disabled
-                        title="Available once project is marked complete"
-                        class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-white/40 text-xs font-bold cursor-not-allowed">
-                    <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
-                    Send Invoice
-                </button>
-            <?php endif; ?>
+                <?php endif; ?>
 
-            <!-- Mobile: Buttons -->
-            <?php if ($projectPayment): ?>
-                <a href="payments.php?status=<?= urlencode($projectPayment['status']) ?>"
-                   class="sm:hidden w-9 h-9 rounded-full <?= $projectPayment['status'] === 'verified' ? 'bg-[#DFF6E8]/30 text-[#DFF6E8]' : 'bg-amber-400/30 text-amber-200' ?> flex items-center justify-center text-xs font-bold"
-                   title="Payment <?= format_payment_ref((int)$projectPayment['id']) ?>">
-                    <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
-                </a>
-            <?php elseif (!empty($project['invoice_sent_at'])): ?>
-                <span class="sm:hidden w-9 h-9 rounded-full bg-purple-500/20 text-purple-200 flex items-center justify-center text-xs font-bold"
-                      title="Invoice sent <?= date('M j, Y', strtotime($project['invoice_sent_at'])) ?>">
-                    <iconify-icon icon="lucide:check-check" class="text-base"></iconify-icon>
-                </span>
-            <?php elseif (($project['status_type'] ?? '') === 'completed'): ?>
-                <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
-                      class="sm:hidden"
-                      onsubmit="return confirm('Send final invoice to client?');">
-                    <?= csrf_input() ?>
-                    <input type="hidden" name="action" value="send_invoice">
-                    <button type="submit"
-                            class="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-500 transition-all shadow-sm"
-                            title="Send Invoice">
+                <!-- Cancel Project Button (Active when not completed or cancelled) -->
+                <?php if (!in_array($project['status_type'] ?? '', ['completed', 'cancelled'], true)): ?>
+                    <button type="button" onclick="openCancelModal()"
+                            class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/20 border border-rose-400/30 text-rose-200 text-xs font-bold hover:bg-rose-500/30 transition-all"
+                            title="Cancel this project">
+                        <iconify-icon icon="lucide:ban" class="text-base"></iconify-icon>
+                        Cancel Project
+                    </button>
+                <?php endif; ?>
+
+                <!-- Mobile: Buttons -->
+                <?php if ($projectPayment): ?>
+                    <a href="payments.php?status=<?= urlencode($projectPayment['status']) ?>"
+                       class="sm:hidden w-9 h-9 rounded-full <?= $projectPayment['status'] === 'verified' ? 'bg-[#DFF6E8]/30 text-[#DFF6E8]' : 'bg-amber-400/30 text-amber-200' ?> flex items-center justify-center text-xs font-bold"
+                       title="Payment <?= format_payment_ref((int)$projectPayment['id']) ?>">
+                        <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
+                    </a>
+                <?php elseif (!empty($project['invoice_sent_at'])): ?>
+                    <span class="sm:hidden w-9 h-9 rounded-full bg-purple-500/20 text-purple-200 flex items-center justify-center text-xs font-bold"
+                          title="Invoice sent <?= date('M j, Y', strtotime($project['invoice_sent_at'])) ?>">
+                        <iconify-icon icon="lucide:check-check" class="text-base"></iconify-icon>
+                    </span>
+                <?php elseif (($project['status_type'] ?? '') === 'completed'): ?>
+                    <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
+                          class="sm:hidden"
+                          onsubmit="return confirm('Send final invoice to client?');">
+                        <?= csrf_input() ?>
+                        <input type="hidden" name="action" value="send_invoice">
+                        <button type="submit"
+                                class="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-500 transition-all shadow-sm"
+                                title="Send Invoice">
+                            <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
+                        </button>
+                    </form>
+                <?php else: ?>
+                    <button type="button"
+                            disabled
+                            title="Available once project is marked complete"
+                            class="sm:hidden w-9 h-9 rounded-full bg-white/5 text-white/30 flex items-center justify-center cursor-not-allowed">
                         <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
                     </button>
-                </form>
-            <?php else: ?>
-                <button type="button"
-                        disabled
-                        title="Available once project is marked complete"
-                        class="sm:hidden w-9 h-9 rounded-full bg-white/5 text-white/30 flex items-center justify-center cursor-not-allowed">
-                    <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
-                </button>
-            <?php endif; ?>
+                <?php endif; ?>
 
-            <?php if (($project['status_type'] ?? '') !== 'completed'): ?>
-            <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
-                  class="sm:hidden"
-                  onsubmit="return confirm('Archive this project?');">
-                <?= csrf_input() ?>
-                <input type="hidden" name="action" value="archive">
-                <button type="submit"
-                        class="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-[#DFF6E8] hover:bg-white/20 transition-all"
-                        title="Mark Complete">
-                    <iconify-icon icon="lucide:check-circle-2" class="text-base"></iconify-icon>
-                </button>
-            </form>
+                <?php if (!in_array($project['status_type'] ?? '', ['completed', 'cancelled'], true)): ?>
+                    <button type="button" onclick="openCancelModal()"
+                            class="sm:hidden w-9 h-9 rounded-full bg-rose-500/20 text-rose-200 flex items-center justify-center hover:bg-rose-500/30 transition-all"
+                            title="Cancel Project">
+                        <iconify-icon icon="lucide:ban" class="text-base"></iconify-icon>
+                    </button>
+                <?php endif; ?>
+
+                <?php if (($project['status_type'] ?? '') !== 'completed'): ?>
+                <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
+                      class="sm:hidden"
+                      onsubmit="return confirm('Archive this project?');">
+                    <?= csrf_input() ?>
+                    <input type="hidden" name="action" value="archive">
+                    <button type="submit"
+                            class="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-[#DFF6E8] hover:bg-white/20 transition-all"
+                            title="Mark Complete">
+                        <iconify-icon icon="lucide:check-circle-2" class="text-base"></iconify-icon>
+                    </button>
+                </form>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
     </div>
@@ -676,6 +713,34 @@ function file_icon(string $name): string
     <!-- Flash messages -->
     <?= render_flash() ?>
 
+    <!-- Cancelled Project Notice Banner -->
+    <?php if (($project['status_type'] ?? '') === 'cancelled'): ?>
+        <div class="p-6 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 shadow-sm flex items-start gap-4">
+            <div class="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0 text-2xl">
+                <iconify-icon icon="lucide:ban"></iconify-icon>
+            </div>
+            <div class="space-y-1.5 flex-1">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h3 class="text-base font-extrabold text-rose-950">
+                        This project was cancelled on <?= date('M j, Y \a\t g:i A', strtotime($project['cancelled_at'] ?? $project['updated_at'])) ?>
+                    </h3>
+                    <span class="px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider bg-rose-200/80 text-rose-900">
+                        Project Cancelled
+                    </span>
+                </div>
+                <p class="text-xs text-rose-800">
+                    Cancelled by: <strong><?= htmlspecialchars($project['canceller_name'] ?? 'Authorized User', ENT_QUOTES, 'UTF-8') ?></strong> (<?= ucfirst($project['canceller_role'] ?? 'user') ?>)
+                    <?php if (!empty($project['cancellation_reason'])): ?>
+                        &mdash; Reason: <em>"<?= htmlspecialchars($project['cancellation_reason'], ENT_QUOTES, 'UTF-8') ?>"</em>
+                    <?php endif; ?>
+                </p>
+                <p class="text-xs text-rose-700/90 pt-0.5">
+                    This project is strictly read-only. Phase updating, deliverable file uploads, and messaging have been disabled. All previous logs, files, and messages are preserved below.
+                </p>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <!--  STAGE BAR -->
     <div class="admin-card p-6 sm:p-8">
         <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-5 mb-6">
@@ -686,6 +751,12 @@ function file_icon(string $name): string
             </div>
 
             <!-- Stage update form -->
+            <?php if (($project['status_type'] ?? '') === 'cancelled'): ?>
+                <span class="px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-1.5">
+                    <iconify-icon icon="lucide:lock" class="text-sm"></iconify-icon>
+                    <span>Phase controls are locked because this project has been cancelled</span>
+                </span>
+            <?php else: ?>
             <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
                   class="flex items-center gap-2 flex-shrink-0">
                 <?= csrf_input() ?>
@@ -704,6 +775,7 @@ function file_icon(string $name): string
                     Update
                 </button>
             </form>
+            <?php endif; ?>
         </div>
 
         <!-- Progress bar -->
@@ -824,6 +896,12 @@ function file_icon(string $name): string
                 <?php endif; ?>
 
                 <!-- Upload form -->
+                <?php if (($project['status_type'] ?? '') === 'cancelled'): ?>
+                    <div class="p-4 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 text-xs text-center flex items-center justify-center gap-2 mt-4">
+                        <iconify-icon icon="lucide:lock" class="text-sm"></iconify-icon>
+                        <span>File uploads are locked because this project has been cancelled.</span>
+                    </div>
+                <?php else: ?>
                 <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
                       enctype="multipart/form-data" id="uploadForm">
                     <?= csrf_input() ?>
@@ -851,6 +929,7 @@ function file_icon(string $name): string
                         </button>
                     </div>
                 </form>
+                <?php endif; ?>
             </div><!-- /FILES -->
 
             <!-- MESSAGES PANEL -->
@@ -896,6 +975,12 @@ function file_icon(string $name): string
                 </div>
 
                 <!-- Send message form -->
+                <?php if (($project['status_type'] ?? '') === 'cancelled'): ?>
+                    <div class="p-4 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 text-xs text-center flex items-center justify-center gap-2">
+                        <iconify-icon icon="lucide:lock" class="text-sm"></iconify-icon>
+                        <span>Messaging is closed for this project because it has been cancelled.</span>
+                    </div>
+                <?php else: ?>
                 <form method="POST" action="project-detail.php?id=<?= $projectId ?>">
                     <?= csrf_input() ?>
                     <input type="hidden" name="action" value="send_message">
@@ -912,6 +997,7 @@ function file_icon(string $name): string
                     </div>
                     <p class="text-[10px] text-[#8890AA] mt-1 text-right" id="charCount">0 / 2000</p>
                 </form>
+                <?php endif; ?>
             </div><!-- /MESSAGES -->
 
         </div><!-- /LEFT COL -->
@@ -1091,5 +1177,57 @@ function updateDropzoneLabel(input) {
 })();
 </script>
 
+  <!-- Cancellation Modal -->
+  <?php if (!in_array($project['status_type'] ?? '', ['completed', 'cancelled'], true)): ?>
+  <div id="cancelModal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="admin-card max-w-md w-full p-6 space-y-4 shadow-2xl bg-white border border-rose-200">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0 text-xl">
+          <iconify-icon icon="lucide:alert-triangle"></iconify-icon>
+        </div>
+        <div class="space-y-1 flex-1">
+          <h3 class="text-base font-bold text-[#13224B]">Cancel Project</h3>
+          <p class="text-xs text-[#555E7B] leading-relaxed">
+            Are you sure you want to cancel <strong><?= htmlspecialchars($project['title'], ENT_QUOTES, 'UTF-8') ?></strong> (<?= htmlspecialchars($project['project_code'], ENT_QUOTES, 'UTF-8') ?>)? This will lock milestone progression, deliverable uploads, and payments. History will remain preserved in read-only mode.
+          </p>
+        </div>
+      </div>
+
+      <form method="POST" action="../cancel-project-handler.php" class="space-y-3 pt-2">
+        <?= csrf_input() ?>
+        <input type="hidden" name="project_id" value="<?= $projectId ?>">
+        <input type="hidden" name="return_to" value="admin/project-detail.php?id=<?= $projectId ?>">
+
+        <div>
+          <label class="block text-xs font-bold text-[#13224B] mb-1">Cancellation Reason <span class="text-xs font-normal text-[#8890AA]">(Optional)</span></label>
+          <textarea name="cancellation_reason" rows="3" maxlength="500" placeholder="Reason for studio cancellation…"
+                    class="antigo-textarea w-full text-xs"></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-2.5 pt-2">
+          <button type="button" onclick="closeCancelModal()"
+                  class="px-4 py-2 rounded-xl text-xs font-bold text-[#555E7B] hover:bg-gray-100 transition-colors">
+            Keep Project
+          </button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow transition-colors inline-flex items-center gap-1.5">
+            <iconify-icon icon="lucide:ban" class="text-sm"></iconify-icon>
+            <span>Confirm Cancellation</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script>
+    function openCancelModal() {
+      const m = document.getElementById('cancelModal');
+      if (m) m.classList.remove('hidden');
+    }
+    function closeCancelModal() {
+      const m = document.getElementById('cancelModal');
+      if (m) m.classList.add('hidden');
+    }
+  </script>
+  <?php endif; ?>
 </body>
 </html>

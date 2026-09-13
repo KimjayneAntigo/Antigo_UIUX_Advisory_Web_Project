@@ -126,8 +126,12 @@ try {
     $projects  = $pdo->query('SELECT * FROM projects ORDER BY created_at DESC')->fetchAll();
     $clients   = $pdo->query("SELECT u.*, COUNT(p.id) AS project_count FROM users u LEFT JOIN projects p ON u.id = p.user_id WHERE u.role = 'client' GROUP BY u.id ORDER BY u.created_at DESC")->fetchAll();
 
+    $activeProjectsCount = 0;
     foreach ($projects as $p) {
-        $totalPipeline += parse_budget_amount($p['budget'] ?? '');
+        if (($p['status_type'] ?? '') !== 'cancelled') {
+            $activeProjectsCount++;
+            $totalPipeline += parse_budget_amount($p['budget'] ?? '');
+        }
     }
 } catch (\PDOException $e) {
     error_log('admin-dashboard fetch error: ' . $e->getMessage());
@@ -329,7 +333,7 @@ try {
                         <iconify-icon icon="lucide:kanban"></iconify-icon>
                     </div>
                 </div>
-                <div class="text-3xl font-extrabold text-[#13224B]"><?= count($projects) ?></div>
+                <div class="text-3xl font-extrabold text-[#13224B]"><?= $activeProjectsCount ?></div>
                 <div class="text-xs text-[#8890AA] mt-1">In design / review</div>
             </div>
 
@@ -524,7 +528,11 @@ try {
                             <div>
                                 <div class="flex justify-between items-start mb-3">
                                     <span class="text-[10px] font-bold uppercase tracking-widest text-[#6C5BB5]"><?= htmlspecialchars($p['category'] ?? 'UI/UX Design') ?></span>
-                                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white text-[#13224B] border border-[rgba(19,34,75,0.08)]"><?= htmlspecialchars($p['status'] ?? 'Discovery') ?></span>
+                                    <?php if (($p['status_type'] ?? '') === 'cancelled'): ?>
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold border" style="background: rgba(239, 68, 68, 0.12); color: #ef4444; border-color: rgba(239, 68, 68, 0.25);">Cancelled</span>
+                                    <?php else: ?>
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white text-[#13224B] border border-[rgba(19,34,75,0.08)]"><?= htmlspecialchars($p['status'] ?? 'Discovery') ?></span>
+                                    <?php endif; ?>
                                 </div>
                                 <h4 class="text-base font-bold text-[#13224B] mb-1"><?= htmlspecialchars($p['title']) ?></h4>
                                 <p class="text-xs text-[#8890AA] mb-4"><?= htmlspecialchars($p['client_name']) ?> (<?= htmlspecialchars($p['company'] ?: 'Client') ?>)</p>
