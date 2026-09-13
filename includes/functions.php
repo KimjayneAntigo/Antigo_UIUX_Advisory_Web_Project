@@ -305,10 +305,11 @@ function convert_inquiry_to_project(PDO $pdo, int $inquiryId): array
                 (user_id, project_code, title, category, client_name, client_email, company, budget, due_date,
                  current_phase, phase_name, progress, status, status_type, internal_notes, created_at, updated_at)
              VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, \'Discovery & Research\', 20, \'Discovery\', \'in_design\', ?, NOW(), NOW())'
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, \'Discovery & Research\', 20, \'Discovery\', \'pending\', ?, NOW(), NOW())'
         );
 
-        $notes = "Converted from Inquiry ref: " . ($inq['ref_code'] ?? ('INQ-' . $inquiryId)) . ".\nDescription: " . ($inq['description'] ?? '');
+        $refStr = 'INQ-' . str_pad((string)$inquiryId, 5, '0', STR_PAD_LEFT);
+        $notes = "Converted from Inquiry ref: " . $refStr . ".\nDescription: " . ($inq['description'] ?? '');
         $pStmt->execute([
             $userId,
             $projectCode,
@@ -329,14 +330,15 @@ function convert_inquiry_to_project(PDO $pdo, int $inquiryId): array
         $upInqStmt->execute([$inquiryId]);
 
         // Copy inquiry file as initial project file if one was uploaded
-        if (!empty($inq['file_name'])) {
-            $inqFilePath = __DIR__ . '/../uploads/inquiries/' . $inq['file_name'];
+        $attachedFile = !empty($inq['attached_file']) ? $inq['attached_file'] : (!empty($inq['file_name']) ? $inq['file_name'] : null);
+        if (!empty($attachedFile)) {
+            $inqFilePath = __DIR__ . '/../uploads/inquiries/' . $attachedFile;
             if (file_exists($inqFilePath)) {
                 $projUploadDir = __DIR__ . '/../uploads/projects/' . $newProjectId . '/';
                 if (!is_dir($projUploadDir)) {
                     mkdir($projUploadDir, 0755, true);
                 }
-                $newFileName = 'inquiry_' . $inq['file_name'];
+                $newFileName = 'inquiry_' . $attachedFile;
                 $projDestPath = $projUploadDir . $newFileName;
                 if (@copy($inqFilePath, $projDestPath)) {
                     $relPath = 'uploads/projects/' . $newProjectId . '/' . $newFileName;
@@ -345,7 +347,7 @@ function convert_inquiry_to_project(PDO $pdo, int $inquiryId): array
                         'INSERT INTO project_files (project_id, uploaded_by, name, size, file_path, uploaded_at)
                          VALUES (?, ?, ?, ?, ?, NOW())'
                     );
-                    $fStmt->execute([$newProjectId, $userId, $inq['file_name'], $fileSizeStr, $relPath]);
+                    $fStmt->execute([$newProjectId, $userId, $attachedFile, $fileSizeStr, $relPath]);
                 }
             }
         }
@@ -373,5 +375,60 @@ function convert_inquiry_to_project(PDO $pdo, int $inquiryId): array
         return ['success' => false, 'error' => 'Database error during project conversion: ' . $e->getMessage()];
     }
 }
+
+/**
+ * Format standard computed payment reference code.
+ * Matches PAY-00001 pattern without redundant storage.
+ */
+function format_payment_ref(int $id): string
+{
+    return 'PAY-' . str_pad((string)$id, 5, '0', STR_PAD_LEFT);
+}
+
+/**
+ * Parse pure numeric amount from project budget string.
+ * Handles currency symbols ($/₱), commas, and ranges (extracts starting value).
+ */
+function parse_budget_amount(string $budget): float
+{
+    if (preg_match('/(\d[\d,]*(?:\.\d+)?)/', $budget, $matches)) {
+        return (float) str_replace(',', '', $matches[1]);
+    }
+    return 0.00;
+}
+
+/**
+ * Fetch the latest payment record for a given project.
+ */
+function get_project_latest_payment(PDO $pdo, int $projectId): ?array
+{
+    if ($projectId <= 0) {
+        return null;
+    }
+    try {
+        $stmt = $pdo->prepare('SELECT * FROM payments WHERE project_id = ? ORDER BY id DESC LIMIT 1');
+        $stmt->execute([$projectId]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    } catch (\PDOException $e) {
+        error_log('get_project_latest_payment error: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Count the number of currently pending payments awaiting admin review.
+ */
+function count_pending_payments(PDO $pdo): int
+{
+    try {
+        $stmt = $pdo->query("SELECT COUNT(*) FROM payments WHERE status = 'pending'");
+        return (int) $stmt->fetchColumn();
+    } catch (\PDOException $e) {
+        error_log('count_pending_payments error: ' . $e->getMessage());
+        return 0;
+    }
+}
+
 
 

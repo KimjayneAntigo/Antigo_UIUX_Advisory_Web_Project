@@ -106,6 +106,14 @@ try {
     error_log('client/project-detail fetch designer error: ' . $e->getMessage());
 }
 
+// Payment details (Available when project is marked complete)
+$payment = null;
+$payableAmount = 0.00;
+if (($project['status_type'] ?? '') === 'completed') {
+    $payment = get_project_latest_payment($pdo, $projectId);
+    $payableAmount = parse_budget_amount($project['budget'] ?? '');
+}
+
 // Helper File icon
 function get_client_file_icon(string $name): string
 {
@@ -432,6 +440,185 @@ $stageIndex = match($currentPhase) {
             </div>
           </div>
 
+          <!-- Payment Card (Shown only when project status_type = 'completed') -->
+          <?php if (($project['status_type'] ?? '') === 'completed'): ?>
+            <?php
+              $pStatus = $payment['status'] ?? 'unsubmitted';
+            ?>
+            <div class="card p-6 border transition-all duration-300 <?= $pStatus === 'verified' ? 'border-emerald-200 bg-emerald-50/30' : ($pStatus === 'pending' ? 'border-amber-200 bg-amber-50/25' : 'border-[rgba(19,34,75,0.08)] bg-white') ?>" id="paymentCardContainer">
+              
+              <div class="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-[rgba(19,34,75,0.06)]">
+                <div class="flex items-center gap-2">
+                  <div class="w-8 h-8 rounded-lg <?= $pStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' : ($pStatus === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-[#DDEBFF] text-[#4C6CCB]') ?> flex items-center justify-center">
+                    <iconify-icon icon="<?= $pStatus === 'verified' ? 'lucide:check-circle-2' : ($pStatus === 'pending' ? 'lucide:clock' : 'lucide:credit-card') ?>" class="text-base"></iconify-icon>
+                  </div>
+                  <div>
+                    <h3 class="text-sm font-extrabold text-[#13224B]">Project Payment</h3>
+                    <p class="text-[10px] text-[#8890AA]">Settlement &amp; Verification</p>
+                  </div>
+                </div>
+
+                <div id="paymentBadgeSlot">
+                  <?php if ($pStatus === 'verified'): ?>
+                    <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                      <iconify-icon icon="lucide:check" class="text-xs"></iconify-icon>
+                      Paid
+                    </span>
+                  <?php elseif ($pStatus === 'pending'): ?>
+                    <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase bg-amber-100 text-amber-800 flex items-center gap-1 animate-pulse">
+                      <iconify-icon icon="lucide:hourglass" class="text-xs"></iconify-icon>
+                      Pending Verification
+                    </span>
+                  <?php elseif ($pStatus === 'rejected'): ?>
+                    <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase bg-rose-100 text-rose-800">
+                      Payment Rejected
+                    </span>
+                  <?php else: ?>
+                    <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase bg-[#DDEBFF] text-[#13224B]">
+                      Payment Due
+                    </span>
+                  <?php endif; ?>
+                </div>
+              </div>
+
+              <!-- State: Verified -->
+              <div id="paymentVerifiedState" class="<?= $pStatus === 'verified' ? '' : 'hidden' ?> space-y-4 text-xs">
+                <div class="p-4 rounded-xl bg-white border border-emerald-200/80 shadow-sm space-y-2.5">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[#8890AA] text-[11px]">Payment Reference</span>
+                    <strong class="font-mono text-emerald-800 font-bold text-xs" id="verifiedRefDisplay">
+                      <?= $payment ? format_payment_ref((int)$payment['id']) : '' ?>
+                    </strong>
+                  </div>
+                  <div class="h-[1px] bg-emerald-100"></div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[#8890AA] text-[11px]">Amount Settled</span>
+                    <strong class="text-emerald-900 font-bold" id="verifiedAmountDisplay">
+                      $<?= $payment ? number_format((float)$payment['amount'], 2) : '' ?>
+                    </strong>
+                  </div>
+                  <div class="h-[1px] bg-emerald-100"></div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[#8890AA] text-[11px]">Payment Method</span>
+                    <span class="font-semibold text-[#13224B]" id="verifiedMethodDisplay">
+                      <?= $payment ? htmlspecialchars($payment['payment_method'], ENT_QUOTES, 'UTF-8') : '' ?>
+                    </span>
+                  </div>
+                  <div class="h-[1px] bg-emerald-100"></div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[#8890AA] text-[11px]">Verified Date</span>
+                    <span class="text-emerald-700 font-semibold" id="verifiedDateDisplay">
+                      <?= ($payment && !empty($payment['verified_at'])) ? date('M j, Y g:i A', strtotime($payment['verified_at'])) : 'Verified' ?>
+                    </span>
+                  </div>
+                </div>
+                <p class="text-[11px] text-emerald-800 bg-emerald-100/50 p-3 rounded-xl leading-relaxed flex items-start gap-2">
+                  <iconify-icon icon="lucide:check-circle" class="text-emerald-600 text-sm flex-shrink-0 mt-0.5"></iconify-icon>
+                  <span>Thank you! Your payment has been verified by the Antigo Advisory team. All project deliverables and accounts are settled.</span>
+                </p>
+              </div>
+
+              <!-- State: Pending Verification -->
+              <div id="paymentPendingState" class="<?= $pStatus === 'pending' ? '' : 'hidden' ?> space-y-4 text-xs">
+                <div class="p-4 rounded-xl bg-white border border-amber-200/80 shadow-sm space-y-2.5">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[#8890AA] text-[11px]">Reference Number</span>
+                    <strong class="font-mono text-[#13224B] font-bold text-xs" id="pendingRefDisplay">
+                      <?= $payment ? format_payment_ref((int)$payment['id']) : '' ?>
+                    </strong>
+                  </div>
+                  <div class="h-[1px] bg-amber-100"></div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[#8890AA] text-[11px]">Amount Declared</span>
+                    <strong class="text-[#13224B] font-bold" id="pendingAmountDisplay">
+                      $<?= $payment ? number_format((float)$payment['amount'], 2) : '' ?>
+                    </strong>
+                  </div>
+                  <div class="h-[1px] bg-amber-100"></div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[#8890AA] text-[11px]">Method</span>
+                    <span class="font-semibold text-[#13224B]" id="pendingMethodDisplay">
+                      <?= $payment ? htmlspecialchars($payment['payment_method'], ENT_QUOTES, 'UTF-8') : '' ?>
+                    </span>
+                  </div>
+                  <div class="h-[1px] bg-amber-100"></div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[#8890AA] text-[11px]">Submitted</span>
+                    <span class="text-[#8890AA]" id="pendingDateDisplay">
+                      <?= ($payment && !empty($payment['submitted_at'])) ? date('M j, Y g:i A', strtotime($payment['submitted_at'])) : 'Just now' ?>
+                    </span>
+                  </div>
+                </div>
+
+                <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200/60 text-amber-900 text-[11px] leading-relaxed flex items-start gap-2.5">
+                  <iconify-icon icon="lucide:info" class="text-amber-600 text-sm flex-shrink-0 mt-0.5"></iconify-icon>
+                  <div>
+                    <strong class="font-bold block mb-0.5">Verification in Progress</strong>
+                    <span>We have received your payment declaration. Our studio administrators will manually confirm receipt in our bank/GCash account before marking it confirmed. No further action is required.</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- State: Form (Not submitted or Rejected resubmission) -->
+              <div id="paymentFormState" class="<?= ($pStatus === 'unsubmitted' || $pStatus === 'rejected') ? '' : 'hidden' ?> space-y-4">
+                
+                <?php if ($pStatus === 'rejected'): ?>
+                  <div class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-[11px] leading-relaxed space-y-1">
+                    <div class="flex items-center gap-1.5 font-bold text-rose-800">
+                      <iconify-icon icon="lucide:alert-circle" class="text-sm"></iconify-icon>
+                      <span>Previous Payment Note from Studio:</span>
+                    </div>
+                    <p class="text-rose-700 bg-white/70 p-2.5 rounded-lg border border-rose-100 italic">
+                      "<?= htmlspecialchars($payment['admin_notes'] ?? 'Payment could not be verified. Please check and resubmit.', ENT_QUOTES, 'UTF-8') ?>"
+                    </p>
+                    <p class="text-[10px] text-rose-600 font-semibold pt-0.5">You can update your payment method and resubmit below.</p>
+                  </div>
+                <?php endif; ?>
+
+                <div class="p-3.5 rounded-xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.06)] flex items-center justify-between">
+                  <span class="text-xs text-[#8890AA]">Amount Due</span>
+                  <div class="text-right">
+                    <strong class="text-base font-extrabold text-[#13224B]">$<?= number_format($payableAmount, 2) ?></strong>
+                    <span class="block text-[10px] text-[#8890AA]">Agreed project budget</span>
+                  </div>
+                </div>
+
+                <div class="text-[11px] text-[#4b4b4b] leading-relaxed bg-[#DDEBFF]/30 p-3 rounded-xl border border-[#DDEBFF]">
+                  <p>Antigo Advisory accepts manual payments processed outside this platform. Select how you completed your payment:</p>
+                </div>
+
+                <div id="paymentErrorBox" class="hidden p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold"></div>
+
+                <form id="paymentSubmitForm" class="space-y-3.5">
+                  <?= csrf_input() ?>
+                  <input type="hidden" name="project_id" value="<?= (int)$projectId ?>">
+
+                  <div>
+                    <label class="block text-xs font-bold text-[#13224B] mb-1.5">Payment Method <span class="text-red-500">*</span></label>
+                    <select name="payment_method" id="paymentMethodSelect" required
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-[rgba(19,34,75,0.15)] text-xs font-semibold text-[#13224B] focus:outline-none focus:border-[#4C6CCB] bg-white">
+                      <option value="GCash">GCash</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Card">Card</option>
+                    </select>
+                  </div>
+
+                  <button type="submit" id="submitPaymentBtn"
+                          class="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold text-white shadow-sm transition-all hover:opacity-95"
+                          style="background: linear-gradient(135deg, #13224B, #4C6CCB);">
+                    <iconify-icon icon="lucide:send" class="text-sm"></iconify-icon>
+                    <span>Submit Payment Declaration</span>
+                  </button>
+                  <p class="text-[10px] text-center text-[#8890AA]">
+                    Self-reported declaration &middot; Studio admin will manually verify
+                  </p>
+                </form>
+              </div>
+
+            </div>
+          <?php endif; ?>
+
           <!-- Designer Profile Card -->
           <div class="card p-6 border border-[rgba(19,34,75,0.08)]">
             <h3 class="text-sm font-bold uppercase tracking-wider text-[#8890AA] mb-4">Assigned Lead Designer</h3>
@@ -472,6 +659,79 @@ $stageIndex = match($currentPhase) {
     const chatContainer = document.getElementById('chatContainer');
     if (chatContainer) {
       chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // Handle manual payment submission via AJAX
+    const paymentForm = document.getElementById('paymentSubmitForm');
+    if (paymentForm) {
+      paymentForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('submitPaymentBtn');
+        const errBox = document.getElementById('paymentErrorBox');
+        if (errBox) errBox.classList.add('hidden');
+
+        btn.disabled = true;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<iconify-icon icon="lucide:loader-2" class="animate-spin text-sm"></iconify-icon> Submitting...';
+
+        const formData = new FormData(paymentForm);
+
+        try {
+          const res = await fetch('../payment-handler.php', {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+
+          const data = await res.json();
+
+          if (data.success) {
+            // Update to pending state UI seamlessly
+            const formState = document.getElementById('paymentFormState');
+            const pendingState = document.getElementById('paymentPendingState');
+            const cardContainer = document.getElementById('paymentCardContainer');
+            const badgeSlot = document.getElementById('paymentBadgeSlot');
+
+            if (formState) formState.classList.add('hidden');
+            if (pendingState) {
+              pendingState.classList.remove('hidden');
+              document.getElementById('pendingRefDisplay').innerText = data.reference_number;
+              document.getElementById('pendingAmountDisplay').innerText = '$' + data.amount;
+              document.getElementById('pendingMethodDisplay').innerText = data.payment_method;
+              document.getElementById('pendingDateDisplay').innerText = 'Just now';
+            }
+
+            if (cardContainer) {
+              cardContainer.className = 'card p-6 border transition-all duration-300 border-amber-200 bg-amber-50/25';
+            }
+
+            if (badgeSlot) {
+              badgeSlot.innerHTML = `
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase bg-amber-100 text-amber-800 flex items-center gap-1 animate-pulse">
+                  <iconify-icon icon="lucide:hourglass" class="text-xs"></iconify-icon>
+                  Pending Verification
+                </span>
+              `;
+            }
+          } else {
+            if (errBox) {
+              errBox.innerText = data.error || 'Failed to submit payment.';
+              errBox.classList.remove('hidden');
+            }
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+          }
+        } catch (err) {
+          if (errBox) {
+            errBox.innerText = 'Network error submitting payment. Please try again.';
+            errBox.classList.remove('hidden');
+          }
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
+      });
     }
   </script>
 </body>

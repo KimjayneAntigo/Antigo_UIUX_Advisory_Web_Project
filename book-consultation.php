@@ -276,7 +276,7 @@ if ($inquiry_id_param > 0) {
     <!-- Header -->
     <header class="sticky top-0 z-50 w-full glass-header">
         <nav class="max-w-[1360px] mx-auto px-6 lg:px-10 h-20 flex items-center justify-between">
-            <a href="home.php" class="logo">
+            <a href="<?= home_url() ?>" class="logo">
                 <img src="images/antigo-mark.png?v=2.0" alt="Antigo Logo" class="logo-mark">
                 <div class="logo-text">
                     <div class="word">ANTIGO</div>

@@ -26,19 +26,20 @@ INSERT INTO `users` (`name`, `email`, `password_hash`, `role`, `company`) VALUES
 
 -- INQUIRIES
 CREATE TABLE IF NOT EXISTS `inquiries` (
-    `id`           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    `user_id`      INT UNSIGNED  DEFAULT NULL,
-    `ref_code`     VARCHAR(20)   NOT NULL UNIQUE COMMENT 'e.g. INQ-1001',
-    `name`         VARCHAR(120)  NOT NULL,
-    `email`        VARCHAR(180)  NOT NULL,
-    `company`      VARCHAR(120)  DEFAULT NULL,
-    `project_type` VARCHAR(80)   NOT NULL,
-    `budget`       VARCHAR(80)   NOT NULL,
-    `timeline`     VARCHAR(80)   NOT NULL,
-    `description`  TEXT          NOT NULL,
-    `file_name`    VARCHAR(255)  DEFAULT NULL,
-    `status`       ENUM('new','reviewed','contacted','converted','lost') NOT NULL DEFAULT 'new',
-    `created_at`   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `id`            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `user_id`       INT UNSIGNED  DEFAULT NULL,
+    `ref_code`      VARCHAR(20)   NOT NULL UNIQUE COMMENT 'e.g. INQ-1001',
+    `name`          VARCHAR(120)  NOT NULL,
+    `email`         VARCHAR(180)  NOT NULL,
+    `phone`         VARCHAR(30)   DEFAULT NULL,
+    `company`       VARCHAR(120)  DEFAULT NULL,
+    `service`       VARCHAR(80)   NOT NULL,
+    `budget`        VARCHAR(80)   NOT NULL,
+    `timeline`      VARCHAR(80)   NOT NULL,
+    `description`   TEXT          NOT NULL,
+    `attached_file` VARCHAR(255)  DEFAULT NULL,
+    `status`        ENUM('new','reviewed','contacted','converted','lost') NOT NULL DEFAULT 'new',
+    `created_at`    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT `fk_inquiries_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
     INDEX `idx_status`  (`status`),
     INDEX `idx_email`   (`email`),
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS `inquiries` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Seed sample inquiries
-INSERT INTO `inquiries` (`user_id`, `ref_code`, `name`, `email`, `company`, `project_type`, `budget`, `timeline`, `description`, `status`) VALUES
+INSERT INTO `inquiries` (`user_id`, `ref_code`, `name`, `email`, `company`, `service`, `budget`, `timeline`, `description`, `status`) VALUES
 (NULL, 'INQ-1001', 'Maria Santos',   'maria@pesolink.com',  'Pesolink Financial Services', 'UI Design',    '$150,000 – $300,000', '1 Month',   'Redesigning mobile banking dashboard for smoother digital transactions and better conversion.', 'new'),
 (1,    'INQ-1002', 'Juan dela Cruz', 'demo@client.com',     'Visayas Health Care',          'UX Research',  '$50,000 – $150,000',  '2–3 Months','Patient portal UX audit and user journey mapping for clinic management system.', 'contacted'),
 (NULL, 'INQ-1003', 'Ana Reyes',      'ana@cebu-tourism.ph', 'Cebu Tourism Board',           'Design Systems','$300,000+',           'Flexible',  'Build a scalable design system for our tourism mobile and web properties.', 'reviewed');
@@ -160,3 +161,20 @@ INSERT INTO `project_messages` (`project_id`, `sender`, `role`, `message`) VALUE
 (1, 'Kimberly Jayne Antigo', 'designer', 'Absolutely! Updated the nav colors in v1.2 of the design file. You can review the latest version in the files section.'),
 (2, 'Kimberly Jayne Antigo', 'designer', 'Hi! The wireframe iterations for the Visayas Health patient onboarding flow are ready for your review.'),
 (2, 'Demo Client',           'client',   'Thank you Kimberly! The patient history step looks very intuitive. We will review it with our clinic heads.');
+
+-- PAYMENTS (Manual Client Recording & Admin Verification)
+CREATE TABLE IF NOT EXISTS `payments` (
+    `id`               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `project_id`       INT UNSIGNED NOT NULL,
+    `user_id`          INT UNSIGNED NOT NULL,
+    `amount`           DECIMAL(10,2) NOT NULL,
+    `payment_method`   ENUM('GCash','Bank Transfer','Cash','Card') NOT NULL,
+    `status`           ENUM('pending','verified','rejected') NOT NULL DEFAULT 'pending',
+    `admin_notes`      TEXT DEFAULT NULL,
+    `submitted_at`     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `verified_at`      TIMESTAMP NULL DEFAULT NULL,
+    CONSTRAINT `fk_payments_project` FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_payments_user`    FOREIGN KEY (`user_id`)    REFERENCES `users`(`id`)    ON DELETE CASCADE,
+    INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

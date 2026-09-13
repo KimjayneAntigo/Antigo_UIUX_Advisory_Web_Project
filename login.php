@@ -8,44 +8,56 @@ if (is_logged_in()) {
     exit;
 }
 
-require_once 'config/db.php';
-
 $error   = '';
 $success = '';
+
+$selected_role = trim($_POST['role'] ?? $_POST['intended_role'] ?? 'client');
+if (!in_array($selected_role, ['client', 'admin'], true)) {
+    $selected_role = 'client';
+}
 
 // POST HANDLER
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
         $error = 'Invalid security token. Please refresh and try again.';
     } else {
-        $email    = trim($_POST['email']    ?? '');
-        $password =      $_POST['password'] ?? '';
+        $email          = trim($_POST['email'] ?? '');
+        $password       = $_POST['password'] ?? '';
+        $submitted_role = trim($_POST['role'] ?? $_POST['intended_role'] ?? '');
+        $generic_auth_error = 'Invalid email or password. Please try again.';
 
-    if (empty($email) || empty($password)) {
-        $error = 'Please enter both email and password.';
-    } else {
-        // Lookup user by email via prepared statement
-        $stmt = $pdo->prepare('SELECT id, name, email, password_hash, role FROM users WHERE email = ? LIMIT 1');
-        $stmt->execute([$email]);
-        $user = $stmt->fetch();
-
-        // Generic error message
-        if (!$user || !password_verify($password, $user['password_hash'])) {
-            $error = 'Invalid email or password. Please try again.';
+        if (empty($email) || empty($password)) {
+            $error = 'Please enter both email and password.';
         } else {
-            // prevent session attacks
-            session_regenerate_id(true);
+            require_once __DIR__ . '/config/db.php';
 
-            $_SESSION['user_id']   = $user['id'];
-            $_SESSION['user_name'] = $user['name'];
-            $_SESSION['name']      = $user['name'];
-            $_SESSION['email']     = $user['email'];
-            $_SESSION['role']      = $user['role'];
+            // Lookup user by email via prepared statement
+            $stmt = $pdo->prepare('SELECT id, name, email, password_hash, role FROM users WHERE email = ? LIMIT 1');
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
 
-            header('Location: ' . home_url());
-            exit;
+            // Validate credentials AND validate that the selected role matches the account's real role
+            if (!$user || !password_verify($password, $user['password_hash'])) {
+                $error = $generic_auth_error;
+            } elseif ($submitted_role !== $user['role']) {
+                // Same generic message as any other failed login — do NOT reveal
+                // that the email is valid but belongs to a different role. That
+                // would let someone enumerate which accounts are admin vs client.
+                $error = $generic_auth_error;
+            } else {
+                // Only after both password check and role check pass:
+                session_regenerate_id(true);
+
+                $_SESSION['user_id']   = $user['id'];
+                $_SESSION['user_name'] = $user['name'];
+                $_SESSION['name']      = $user['name'];
+                $_SESSION['email']     = $user['email'];
+                $_SESSION['role']      = $user['role'];
+
+                header('Location: ' . home_url());
+                exit;
+            }
         }
-    }
     }
 }
 
@@ -163,7 +175,7 @@ $flash = $_GET['msg'] ?? '';
     <!-- Minimal Header -->
     <header class="w-full bg-white/80 backdrop-blur-md border-b border-[rgba(19,34,75,0.08)] py-4 px-6 sm:px-12 sticky top-0 z-50">
         <div class="max-w-[1360px] mx-auto flex items-center justify-between">
-            <a href="home.php" class="logo">
+            <a href="<?= home_url() ?>" class="logo">
                 <img src="images/antigo-mark.png?v=2.0" alt="Antigo Logo" class="logo-mark">
                 <div class="logo-text">
                     <div class="word">ANTIGO</div>
@@ -219,10 +231,10 @@ $flash = $_GET['msg'] ?? '';
                             <h1 class="text-2xl sm:text-3xl font-extrabold text-[#13224B]">Log In</h1>
                             <p class="text-xs sm:text-sm text-[#4b4b4b] mt-1">Select your account role to continue</p>
                         </div>
-                        <!-- Role Toggle (visual only — actual role determined by DB) -->
+                        <!-- Role Toggle -->
                         <div class="inline-flex bg-[#F4F6F8] p-1 rounded-full border border-[rgba(19,34,75,0.08)] self-start sm:self-auto">
-                            <button type="button" id="role-client" onclick="setRole('client')" class="role-pill active px-5 py-2 rounded-full text-xs font-bold">Client</button>
-                            <button type="button" id="role-admin"  onclick="setRole('admin')"  class="role-pill px-5 py-2 rounded-full text-xs font-bold">Admin</button>
+                            <button type="button" id="role-client" onclick="setRole('client')" class="role-pill <?= $selected_role === 'client' ? 'active' : '' ?> px-5 py-2 rounded-full text-xs font-bold">Client</button>
+                            <button type="button" id="role-admin"  onclick="setRole('admin')"  class="role-pill <?= $selected_role === 'admin' ? 'active' : '' ?> px-5 py-2 rounded-full text-xs font-bold">Admin</button>
                         </div>
                     </div>
 
@@ -248,7 +260,7 @@ $flash = $_GET['msg'] ?? '';
                         <!-- Client-side validation error (JS only, no server round-trip needed) -->
                         <div id="js-error" class="hidden p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-medium"></div>
 
-                        <input type="hidden" name="intended_role" id="intended_role" value="client">
+                        <input type="hidden" name="role" id="intended_role" value="<?= htmlspecialchars($selected_role, ENT_QUOTES, 'UTF-8') ?>">
 
                         <div>
                             <label for="email" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Email Address</label>
@@ -273,7 +285,7 @@ $flash = $_GET['msg'] ?? '';
                         </div>
 
                         <button type="submit" class="btn-brand-primary w-full py-4 rounded-xl font-bold uppercase text-xs tracking-wider flex items-center justify-center gap-2">
-                            <span id="btn-text">Sign In as Client</span>
+                            <span id="btn-text">Sign In as <?= $selected_role === 'admin' ? 'Admin' : 'Client' ?></span>
                             <iconify-icon icon="lucide:arrow-right" class="text-base"></iconify-icon>
                         </button>
                     </form>
@@ -316,7 +328,7 @@ $flash = $_GET['msg'] ?? '';
     </footer>
 
     <script>
-        let currentRole = 'client';
+        let currentRole = <?= json_encode($selected_role) ?>;
 
         function setRole(role) {
             currentRole = role;

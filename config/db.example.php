@@ -1,6 +1,7 @@
 <?php
 // Configuration template: copy this file to db.php and update with your local credentials.
 define('DB_HOST', 'localhost');
+define('DB_PORT', 3306);
 define('DB_NAME', 'antigo_advisory_db');
 define('DB_USER', 'root');
 define('DB_PASS', '');   // Default XAMPP password is empty
@@ -16,19 +17,15 @@ $pdo_options = [
     PDO::ATTR_EMULATE_PREPARES   => false,
 ];
 
-// Attempt connection across standard XAMPP MariaDB ports (3307 and 3306)
-$ports = [3307, 3306];
+// Connect to standard MySQL port 3306
 $pdo = null;
 $lastException = null;
 
-foreach ($ports as $port) {
-    try {
-        $dsn = "mysql:host=" . DB_HOST . ";port=" . $port . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
-        $pdo = new PDO($dsn, DB_USER, DB_PASS, $pdo_options);
-        break;
-    } catch (PDOException $e) {
-        $lastException = $e;
-    }
+try {
+    $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
+    $pdo = new PDO($dsn, DB_USER, DB_PASS, $pdo_options);
+} catch (PDOException $e) {
+    $lastException = $e;
 }
 
 if (!$pdo) {

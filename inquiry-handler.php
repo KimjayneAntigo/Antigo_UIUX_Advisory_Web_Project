@@ -190,10 +190,10 @@ try {
 
     $stmt = $pdo->prepare(
         'INSERT INTO inquiries
-            (user_id, ref_code, name, email, phone, company, service,
+            (user_id, name, email, phone, company, service,
              budget, timeline, description, attached_file, status, created_at)
          VALUES
-            (?, \'PENDING\', ?, ?, ?, ?, ?, ?, ?, ?, ?, \'new\', NOW())'
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'new\', NOW())'
     );
 
     $stmt->execute([
@@ -210,10 +210,7 @@ try {
     ]);
 
     $new_inquiry_id = (int) $pdo->lastInsertId();
-    $ref_code       = 'INQ-' . str_pad((string)$new_inquiry_id, 4, '0', STR_PAD_LEFT);
-
-    $updStmt = $pdo->prepare('UPDATE inquiries SET ref_code = ? WHERE id = ?');
-    $updStmt->execute([$ref_code, $new_inquiry_id]);
+    $ref_code       = 'INQ-' . str_pad((string)$new_inquiry_id, 5, '0', STR_PAD_LEFT);
 
     $pdo->commit();
 
@@ -232,12 +229,12 @@ try {
         'redirect'      => $user_id ? 'client-dashboard.php' : null,
         'inquiry_id'    => $ref_code,
         'raw_id'        => $new_inquiry_id,
-        'name'          => $sanitizedName,
-        'email'         => $sanitizedEmail,
-        'phone'         => $sanitizedPhone,
-        'service'       => $sanitizedProjectType,
-        'budget'        => $sanitizedBudget,
-        'timeline'      => $sanitizedTimeline,
+        'name'          => $name,
+        'email'         => $email,
+        'phone'         => $phone,
+        'service'       => $projectType,
+        'budget'        => $budget,
+        'timeline'      => $timeline,
     ]);
     exit;
 

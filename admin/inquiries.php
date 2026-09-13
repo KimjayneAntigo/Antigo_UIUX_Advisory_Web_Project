@@ -61,13 +61,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Delete Inquiry Action
     if ($action === 'delete_inquiry') {
         try {
-            $fStmt = $pdo->prepare('SELECT file_name FROM inquiries WHERE id = ? LIMIT 1');
+            $fStmt = $pdo->prepare('SELECT * FROM inquiries WHERE id = ? LIMIT 1');
             $fStmt->execute([$inquiryId]);
             $inqRow = $fStmt->fetch();
-            if ($inqRow && !empty($inqRow['file_name'])) {
-                $filePath = __DIR__ . '/../uploads/inquiries/' . $inqRow['file_name'];
-                if (file_exists($filePath)) {
-                    @unlink($filePath);
+            if ($inqRow) {
+                $attachedFile = $inqRow['attached_file'] ?? ($inqRow['file_name'] ?? null);
+                if (!empty($attachedFile)) {
+                    $filePath = __DIR__ . '/../uploads/inquiries/' . $attachedFile;
+                    if (file_exists($filePath)) {
+                        @unlink($filePath);
+                    }
                 }
             }
 
@@ -210,7 +213,7 @@ $totalPages = max(1, (int) ceil($totalRows / $perPage));
                         <?= htmlspecialchars($inq['company'] ?: 'Individual / Independent', ENT_QUOTES, 'UTF-8') ?>
                       </div>
                       <span class="inline-block mt-1 font-mono text-[10px] text-[#8890AA] bg-gray-100 px-1.5 py-0.5 rounded">
-                        <?= htmlspecialchars($inq['ref_code'], ENT_QUOTES, 'UTF-8') ?>
+                        INQ-<?= str_pad((string)$inq['id'], 5, '0', STR_PAD_LEFT) ?>
                       </span>
                     </td>
 
@@ -422,7 +425,7 @@ $totalPages = max(1, (int) ceil($totalRows / $perPage));
 
   <script>
     function openInquiryModal(inq) {
-      document.getElementById('modalRefCode').innerText       = inq.ref_code;
+      document.getElementById('modalRefCode').innerText       = 'INQ-' + String(inq.id).padStart(5, '0');
       document.getElementById('modalStatusBadge').innerText   = inq.status.toUpperCase();
       document.getElementById('modalStatusBadge').className   = 'text-xs font-bold px-2.5 py-0.5 rounded-full badge-' + inq.status;
       document.getElementById('modalName').innerText          = inq.name;

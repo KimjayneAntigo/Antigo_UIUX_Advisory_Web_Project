@@ -308,6 +308,9 @@ if (!empty($project['client_email'])) {
     }
 }
 
+// Payment details for this project
+$projectPayment = get_project_latest_payment($pdo, $projectId);
+
 // Display helpers
 $pageTitle  = htmlspecialchars($project['title'], ENT_QUOTES, 'UTF-8') . ' — Admin';
 $dueDateFmt = $project['due_date'] ? date('M j, Y', strtotime($project['due_date'])) : 'TBD';
@@ -551,15 +554,36 @@ function file_icon(string $name): string
                 </button>
             </form>
 
-            <!-- Send Invoice stub -->
-            <button type="button"
-                    onclick="alert('Invoice module coming soon.')"
-                    class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-bold hover:bg-white/20 transition-all">
-                <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
-                Send Invoice
-            </button>
+            <!-- Payment Status / Send Invoice action -->
+            <?php if ($projectPayment): ?>
+                <?php
+                    $payRef = format_payment_ref((int)$projectPayment['id']);
+                    $pSt = $projectPayment['status'];
+                ?>
+                <a href="payments.php?status=<?= urlencode($pSt) ?>"
+                   title="Payment <?= $payRef ?> (<?= ucfirst($pSt) ?>) — Click to review in Payments Hub"
+                   class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all <?= $pSt === 'verified' ? 'bg-[#DFF6E8]/30 border-[#DFF6E8]/50 text-[#DFF6E8] hover:bg-[#DFF6E8]/40' : ($pSt === 'rejected' ? 'bg-red-500/20 border-red-400/40 text-red-200 hover:bg-red-500/30' : 'bg-amber-400/20 border-amber-300/40 text-amber-200 hover:bg-amber-400/30 animate-pulse') ?>">
+                    <iconify-icon icon="<?= $pSt === 'verified' ? 'lucide:check-circle' : ($pSt === 'rejected' ? 'lucide:x-circle' : 'lucide:hourglass') ?>" class="text-base"></iconify-icon>
+                    <span><?= $pSt === 'verified' ? "Paid: {$payRef}" : ($pSt === 'rejected' ? "Rejected: {$payRef}" : "Pending: {$payRef}") ?></span>
+                </a>
+            <?php else: ?>
+                <!-- Send Invoice stub -->
+                <button type="button"
+                        onclick="alert('Invoice module coming soon.')"
+                        class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-bold hover:bg-white/20 transition-all">
+                    <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
+                    Send Invoice
+                </button>
+            <?php endif; ?>
 
-            <!-- Mobile: archive icon only -->
+            <!-- Mobile: archive icon and payment icon -->
+            <?php if ($projectPayment): ?>
+                <a href="payments.php?status=<?= urlencode($projectPayment['status']) ?>"
+                   class="sm:hidden w-9 h-9 rounded-full <?= $projectPayment['status'] === 'verified' ? 'bg-[#DFF6E8]/30 text-[#DFF6E8]' : 'bg-amber-400/30 text-amber-200' ?> flex items-center justify-center text-xs font-bold"
+                   title="Payment <?= format_payment_ref((int)$projectPayment['id']) ?>">
+                    <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
+                </a>
+            <?php endif; ?>
             <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
                   class="sm:hidden"
                   onsubmit="return confirm('Archive this project?');">

@@ -6,6 +6,7 @@
 
 require_once __DIR__ . '/includes/routing.php';
 require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/includes/functions.php';
 
 header('Content-Type: application/json');
 
@@ -189,9 +190,11 @@ try {
 
     $pdo->commit();
 
-} catch (PDOException $e) {
-    $pdo->rollBack();
-    error_log('booking-handler PDOException: ' . $e->getMessage());
+} catch (Throwable $e) {
+    if ($pdo && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    error_log('booking-handler Throwable: ' . $e->getMessage());
     http_response_code(500);
     echo json_encode(['error' => 'Something went wrong saving your booking. Please try again.']);
     exit;

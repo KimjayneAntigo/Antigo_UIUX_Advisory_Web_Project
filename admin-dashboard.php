@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $res = convert_inquiry_to_project($pdo, $inquiryId);
         if ($res['success']) {
             set_flash('success', "Inquiry successfully converted to Project {$res['project_code']}!");
-            safe_redirect("admin/project-detail.php?id={$res['project_id']}");
+            safe_redirect("admin-project.php?id={$res['project_id']}");
         } else {
             set_flash('error', $res['error'] ?? 'Database error converting inquiry to project.');
             safe_redirect('admin-dashboard.php');
@@ -55,13 +55,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $inquiryId = (int) ($_POST['inquiry_id'] ?? 0);
         if ($inquiryId > 0) {
             try {
-                $fStmt = $pdo->prepare('SELECT file_name FROM inquiries WHERE id = ? LIMIT 1');
+                $fStmt = $pdo->prepare('SELECT * FROM inquiries WHERE id = ? LIMIT 1');
                 $fStmt->execute([$inquiryId]);
                 $inqRow = $fStmt->fetch();
-                if ($inqRow && !empty($inqRow['file_name'])) {
-                    $filePath = __DIR__ . '/uploads/inquiries/' . $inqRow['file_name'];
-                    if (file_exists($filePath)) {
-                        @unlink($filePath);
+                if ($inqRow) {
+                    $attachedFile = $inqRow['attached_file'] ?? ($inqRow['file_name'] ?? null);
+                    if (!empty($attachedFile)) {
+                        $filePath = __DIR__ . '/uploads/inquiries/' . $attachedFile;
+                        if (file_exists($filePath)) {
+                            @unlink($filePath);
+                        }
                     }
                 }
                 $delStmt = $pdo->prepare('DELETE FROM inquiries WHERE id = ?');
@@ -383,7 +386,7 @@ try {
                                 if ($status === 'converted') $badgeClass = 'badge-converted';
                             ?>
                                 <tr class="hover:bg-[#F4F6F8] transition-colors">
-                                    <td class="py-4 px-4 font-mono font-bold text-[#13224B]"><?= htmlspecialchars($inq['ref_code'] ?? 'INQ-' . $inq['id']) ?></td>
+                                    <td class="py-4 px-4 font-mono font-bold text-[#13224B]">INQ-<?= str_pad((string)$inq['id'], 5, '0', STR_PAD_LEFT) ?></td>
                                     <td class="py-4 px-4">
                                         <div class="font-bold text-[#13224B]"><?= htmlspecialchars($inq['name']) ?></div>
                                         <div class="text-[10px] text-[#8890AA]"><?= htmlspecialchars($inq['company'] ?: $inq['email']) ?></div>
@@ -705,7 +708,7 @@ try {
             document.getElementById('convertInquiryIdInput').value = inq.id;
             const delInp = document.getElementById('modalDeleteInquiryIdInput');
             if (delInp) delInp.value = inq.id;
-            document.getElementById('modalInqId').innerText = inq.ref_code || ('INQ-' + inq.id);
+            document.getElementById('modalInqId').innerText = 'INQ-' + String(inq.id).padStart(5, '0');
             document.getElementById('modalInqName').innerText = inq.name;
             document.getElementById('modalInqCompany').innerText = `${inq.company || 'Direct Client'} · ${inq.email}`;
             document.getElementById('modalInqService').innerText = inq.service || 'UI/UX Design';

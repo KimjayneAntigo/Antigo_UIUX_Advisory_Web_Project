@@ -212,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <!-- Minimal Header -->
     <header class="w-full bg-white/80 backdrop-blur-md border-b border-[rgba(19,34,75,0.08)] py-4 px-6 sm:px-12 sticky top-0 z-50">
         <div class="max-w-[1360px] mx-auto flex items-center justify-between">
-            <a href="home.php" class="logo">
+            <a href="<?= home_url() ?>" class="logo">
                 <img src="images/antigo-mark.png?v=2.0" alt="Antigo Logo" class="logo-mark">
                 <div class="logo-text">
                     <div class="word">ANTIGO</div>

@@ -345,7 +345,7 @@ try {
                   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
                     <div class="flex items-center gap-2">
                       <span class="px-2 py-0.5 rounded bg-[#13224B] font-mono text-[10px] font-bold text-white">
-                        <?= htmlspecialchars($inq['ref_code'], ENT_QUOTES, 'UTF-8') ?>
+                        INQ-<?= str_pad((string)$inq['id'], 5, '0', STR_PAD_LEFT) ?>
                       </span>
                       <h4 class="text-sm font-bold text-[#13224B]">
                         <?= htmlspecialchars($inq['service'] ?: $inq['project_type'] ?: 'Project Inquiry', ENT_QUOTES, 'UTF-8') ?>

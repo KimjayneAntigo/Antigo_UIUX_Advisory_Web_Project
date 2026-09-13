@@ -15,10 +15,23 @@ $userEmail = htmlspecialchars($_SESSION['email'] ?? 'admin@antigo.com', ENT_QUOT
 $nameParts = explode(' ', trim($rawName));
 $initials  = strtoupper(substr($nameParts[0], 0, 1) . (isset($nameParts[1]) ? substr($nameParts[1], 0, 1) : ''));
 
+// Dynamic badge counts for inquiries and payments
+$pendingPaymentsCount  = 0;
+$pendingInquiriesCount = 0;
+if (isset($pdo)) {
+    try {
+        $pendingPaymentsCount  = (int) $pdo->query("SELECT COUNT(*) FROM payments WHERE status = 'pending'")->fetchColumn();
+        $pendingInquiriesCount = (int) $pdo->query("SELECT COUNT(*) FROM inquiries WHERE status = 'new'")->fetchColumn();
+    } catch (\Throwable $e) {
+        // Silently skip if query fails
+    }
+}
+
 // Nav items
 $navItems = [
     ['Overview',   'lucide:layout-dashboard', $base . 'admin-dashboard.php', 'overview'],
     ['Inquiries',  'lucide:mail',             $base . 'admin/inquiries.php', 'inquiries'],
+    ['Payments',   'lucide:credit-card',      $base . 'admin/payments.php',  'payments'],
     ['Bookings',   'lucide:calendar-check',   $base . 'admin-dashboard.php#bookings', 'bookings'],
     ['Projects',   'lucide:folder-kanban',    $base . 'admin-dashboard.php#projects', 'projects'],
     ['Clients',    'lucide:users',            $base . 'admin-dashboard.php#clients',  'clients'],
@@ -51,12 +64,30 @@ $navItems = [
   <!-- Navigation -->
   <nav class="flex-1 px-3 space-y-0.5">
     <?php foreach ($navItems as [$label, $icon, $href, $key]): ?>
+      <?php
+        $badgeCount = 0;
+        if ($key === 'payments') {
+            $badgeCount = $pendingPaymentsCount;
+        } elseif ($key === 'inquiries') {
+            $badgeCount = $pendingInquiriesCount;
+        }
+      ?>
       <a
         href="<?= htmlspecialchars($href, ENT_QUOTES, 'UTF-8') ?>"
-        class="sidebar-link<?= (($activePage ?? '') === $key ? ' active' : '') ?>"
+        class="sidebar-link<?= (($activePage ?? '') === $key ? ' active' : '') ?> justify-between"
       >
-        <iconify-icon icon="<?= $icon ?>" width="18" height="18"></iconify-icon>
-        <?= $label ?>
+        <div class="flex items-center gap-2.5">
+          <iconify-icon icon="<?= $icon ?>" width="18" height="18"></iconify-icon>
+          <span><?= $label ?></span>
+        </div>
+        <?php if ($badgeCount > 0): ?>
+          <span
+            class="px-2 py-0.5 text-[10px] font-extrabold rounded-full ml-auto"
+            style="background:rgba(255,241,214,0.18);color:#fcd34d;border:1px solid rgba(245,158,11,0.3);"
+          >
+            <?= $badgeCount ?>
+          </span>
+        <?php endif; ?>
       </a>
     <?php endforeach; ?>
   </nav>
