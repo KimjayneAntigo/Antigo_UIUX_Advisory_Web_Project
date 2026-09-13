@@ -127,8 +127,7 @@ try {
     $clients   = $pdo->query("SELECT u.*, COUNT(p.id) AS project_count FROM users u LEFT JOIN projects p ON u.id = p.user_id WHERE u.role = 'client' GROUP BY u.id ORDER BY u.created_at DESC")->fetchAll();
 
     foreach ($projects as $p) {
-        $num = (int) preg_replace('/[^0-9]/', '', $p['budget'] ?? '');
-        $totalPipeline += $num;
+        $totalPipeline += parse_budget_amount($p['budget'] ?? '');
     }
 } catch (\PDOException $e) {
     error_log('admin-dashboard fetch error: ' . $e->getMessage());

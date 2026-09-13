@@ -56,10 +56,10 @@ try {
         exit;
     }
 
-    // 3. Status check: Project must be completed
-    if (($project['status_type'] ?? '') !== 'completed') {
+    // 3. Status check: Project must be completed and final invoice issued by studio
+    if (($project['status_type'] ?? '') !== 'completed' || empty($project['invoice_sent_at'])) {
         http_response_code(400);
-        echo json_encode(['success' => false, 'error' => "Payment isn't available until the project is marked complete."]);
+        echo json_encode(['success' => false, 'error' => "Payment isn't available until the studio sends your final invoice."]);
         exit;
     }
 

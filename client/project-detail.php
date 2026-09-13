@@ -106,10 +106,10 @@ try {
     error_log('client/project-detail fetch designer error: ' . $e->getMessage());
 }
 
-// Payment details (Available when project is marked complete)
+// Payment details (Available when project is marked complete and invoice is sent)
 $payment = null;
 $payableAmount = 0.00;
-if (($project['status_type'] ?? '') === 'completed') {
+if (($project['status_type'] ?? '') === 'completed' && !empty($project['invoice_sent_at'])) {
     $payment = get_project_latest_payment($pdo, $projectId);
     $payableAmount = parse_budget_amount($project['budget'] ?? '');
 }
@@ -440,8 +440,9 @@ $stageIndex = match($currentPhase) {
             </div>
           </div>
 
-          <!-- Payment Card (Shown only when project status_type = 'completed') -->
+          <!-- Payment Card (Gated by completion AND invoice_sent_at) -->
           <?php if (($project['status_type'] ?? '') === 'completed'): ?>
+            <?php if (!empty($project['invoice_sent_at'])): ?>
             <?php
               $pStatus = $payment['status'] ?? 'unsubmitted';
             ?>
@@ -617,6 +618,30 @@ $stageIndex = match($currentPhase) {
               </div>
 
             </div>
+            <?php else: ?>
+            <!-- Quieter Notice: Complete but final invoice has not been sent yet -->
+            <div class="card p-6 border border-[rgba(19,34,75,0.08)] bg-white/95 shadow-sm" id="paymentCardContainer">
+              <div class="flex items-start gap-3.5">
+                <div class="w-9 h-9 rounded-xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <iconify-icon icon="lucide:receipt" class="text-lg"></iconify-icon>
+                </div>
+                <div class="space-y-1.5 flex-1">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-extrabold text-[#13224B]">Project Payment</h3>
+                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FFF1D6] text-[#946200]">
+                      Invoice Pending
+                    </span>
+                  </div>
+                  <p class="text-xs text-[#555E7B] leading-relaxed">
+                    Your project is complete — the studio will send your final invoice shortly.
+                  </p>
+                  <p class="text-[11px] text-[#8890AA] pt-1">
+                    Once the studio issues your invoice, payment options will unlock right here and appear on your dashboard.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <?php endif; ?>
           <?php endif; ?>
 
           <!-- Designer Profile Card -->

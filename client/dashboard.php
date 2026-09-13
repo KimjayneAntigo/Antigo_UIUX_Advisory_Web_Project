@@ -94,6 +94,7 @@ $activeProjectsCount = 0;
 $totalFilesCount     = 0;
 $messagesCount       = 0;
 $projects            = [];
+$invoicedProjects    = [];
 $pendingInquiries    = [];
 $clientFiles         = [];
 $clientMessages      = [];
@@ -175,6 +176,20 @@ try {
     $stmtMsgs->execute(['uid' => $userId]);
     $clientMessages = $stmtMsgs->fetchAll();
 
+    // Invoiced Projects Awaiting Payment (invoice_sent_at IS NOT NULL and no verified payment)
+    $stmtInvoiced = $pdo->prepare(
+        "SELECT p.id, p.title, p.project_code, p.invoice_sent_at
+         FROM projects p
+         LEFT JOIN payments pay ON pay.project_id = p.id AND pay.status = 'verified'
+         WHERE p.user_id = :uid
+           AND p.status_type = 'completed'
+           AND p.invoice_sent_at IS NOT NULL
+           AND pay.id IS NULL
+         ORDER BY p.invoice_sent_at DESC"
+    );
+    $stmtInvoiced->execute(['uid' => $userId]);
+    $invoicedProjects = $stmtInvoiced->fetchAll();
+
     // Recent Activity Feed (Merged Files + Messages)
     $fileActs = array_map(function ($f) {
         return [
@@ -245,6 +260,35 @@ try {
 
       <!-- Flash Notification -->
       <?= render_flash() ?>
+
+      <!-- Invoiced Projects Notification Banners -->
+      <?php if (!empty($invoicedProjects)): ?>
+        <div class="space-y-3">
+          <?php foreach ($invoicedProjects as $invProj): ?>
+            <div class="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#13224B] via-[#21356f] to-[#4C6CCB] border border-blue-400/30 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div class="flex items-center gap-3.5">
+                <div class="w-10 h-10 rounded-xl bg-amber-400/20 border border-amber-300/30 flex items-center justify-center text-amber-300 flex-shrink-0 text-xl">
+                  <iconify-icon icon="lucide:receipt"></iconify-icon>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 font-mono">Invoice Ready</span>
+                    <span class="text-xs text-blue-200 font-mono"><?= htmlspecialchars($invProj['project_code'], ENT_QUOTES, 'UTF-8') ?></span>
+                  </div>
+                  <p class="text-sm font-bold text-white mt-1">
+                    Your project '<?= htmlspecialchars($invProj['title'], ENT_QUOTES, 'UTF-8') ?>' is complete — invoice ready.
+                  </p>
+                </div>
+              </div>
+              <a href="project-detail.php?id=<?= (int)$invProj['id'] ?>#paymentCardContainer"
+                 class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#13224B] font-extrabold text-xs shadow transition-all flex-shrink-0">
+                <span>Pay Now</span>
+                <iconify-icon icon="lucide:arrow-right" class="text-sm"></iconify-icon>
+              </a>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
 
       <!-- Welcome Banner -->
       <div class="card p-6 sm:p-8 bg-gradient-to-r from-[#13224B] via-[#21356f] to-[#6C5BB5] text-white border-0 shadow-lg relative overflow-hidden">

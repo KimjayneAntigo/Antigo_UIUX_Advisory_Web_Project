@@ -241,10 +241,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "UPDATE projects SET status_type = 'completed', updated_at = NOW() WHERE id = ?"
             );
             $stmt->execute([$projectId]);
-            set_flash('success', 'Project archived.');
+            set_flash('success', 'Project marked as completed.');
         } catch (\PDOException $e) {
             error_log('project-detail archive error: ' . $e->getMessage());
             set_flash('error', 'Could not archive project. Please try again.');
+        }
+        safe_redirect("project-detail.php?id={$projectId}");
+    }
+
+    // Send Invoice
+    if ($action === 'send_invoice') {
+        try {
+            $stmt = $pdo->prepare(
+                "UPDATE projects 
+                 SET invoice_sent_at = NOW(), updated_at = NOW() 
+                 WHERE id = ? AND status_type = 'completed'"
+            );
+            $stmt->execute([$projectId]);
+            if ($stmt->rowCount() > 0) {
+                set_flash('success', 'Invoice sent to client. Payment flow is now unlocked on the client portal.');
+            } else {
+                set_flash('error', 'Invoice cannot be sent until the project is marked complete.');
+            }
+        } catch (\PDOException $e) {
+            error_log('project-detail send_invoice error: ' . $e->getMessage());
+            set_flash('error', 'Database error sending invoice. Please try again.');
         }
         safe_redirect("project-detail.php?id={$projectId}");
     }
@@ -543,9 +564,11 @@ function file_icon(string $name): string
 
         <!-- action buttons -->
         <div class="flex items-center gap-2 flex-shrink-0">
-            <!-- Mark Complete -->
+            <!-- Mark Complete (Only visible if not already completed) -->
+            <?php if (($project['status_type'] ?? '') !== 'completed'): ?>
             <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
                   onsubmit="return confirm('Archive this project? This marks it as Completed.');">
+                <?= csrf_input() ?>
                 <input type="hidden" name="action" value="archive">
                 <button type="submit"
                         class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#DFF6E8]/20 border border-[#DFF6E8]/30 text-[#DFF6E8] text-xs font-bold hover:bg-[#DFF6E8]/30 transition-all">
@@ -553,6 +576,7 @@ function file_icon(string $name): string
                     Mark Complete
                 </button>
             </form>
+            <?php endif; ?>
 
             <!-- Payment Status / Send Invoice action -->
             <?php if ($projectPayment): ?>
@@ -566,27 +590,74 @@ function file_icon(string $name): string
                     <iconify-icon icon="<?= $pSt === 'verified' ? 'lucide:check-circle' : ($pSt === 'rejected' ? 'lucide:x-circle' : 'lucide:hourglass') ?>" class="text-base"></iconify-icon>
                     <span><?= $pSt === 'verified' ? "Paid: {$payRef}" : ($pSt === 'rejected' ? "Rejected: {$payRef}" : "Pending: {$payRef}") ?></span>
                 </a>
+            <?php elseif (!empty($project['invoice_sent_at'])): ?>
+                <!-- Invoice Sent Indicator -->
+                <span class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-200 text-xs font-bold"
+                      title="Invoice was sent on <?= date('M j, Y g:i A', strtotime($project['invoice_sent_at'])) ?>">
+                    <iconify-icon icon="lucide:check-check" class="text-base text-purple-300"></iconify-icon>
+                    <span>Invoice sent <?= date('M j, Y', strtotime($project['invoice_sent_at'])) ?></span>
+                </span>
+            <?php elseif (($project['status_type'] ?? '') === 'completed'): ?>
+                <!-- Send Invoice Action (Active) -->
+                <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
+                      onsubmit="return confirm('Send final invoice to client? This unlocks payment on their portal.');">
+                    <?= csrf_input() ?>
+                    <input type="hidden" name="action" value="send_invoice">
+                    <button type="submit"
+                            class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 border border-blue-400/30 text-white text-xs font-bold hover:bg-blue-500 transition-all shadow-sm">
+                        <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
+                        Send Invoice
+                    </button>
+                </form>
             <?php else: ?>
-                <!-- Send Invoice stub -->
+                <!-- Send Invoice Action (Disabled until completed) -->
                 <button type="button"
-                        onclick="alert('Invoice module coming soon.')"
-                        class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-bold hover:bg-white/20 transition-all">
+                        disabled
+                        title="Available once project is marked complete"
+                        class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-white/40 text-xs font-bold cursor-not-allowed">
                     <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
                     Send Invoice
                 </button>
             <?php endif; ?>
 
-            <!-- Mobile: archive icon and payment icon -->
+            <!-- Mobile: Buttons -->
             <?php if ($projectPayment): ?>
                 <a href="payments.php?status=<?= urlencode($projectPayment['status']) ?>"
                    class="sm:hidden w-9 h-9 rounded-full <?= $projectPayment['status'] === 'verified' ? 'bg-[#DFF6E8]/30 text-[#DFF6E8]' : 'bg-amber-400/30 text-amber-200' ?> flex items-center justify-center text-xs font-bold"
                    title="Payment <?= format_payment_ref((int)$projectPayment['id']) ?>">
                     <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
                 </a>
+            <?php elseif (!empty($project['invoice_sent_at'])): ?>
+                <span class="sm:hidden w-9 h-9 rounded-full bg-purple-500/20 text-purple-200 flex items-center justify-center text-xs font-bold"
+                      title="Invoice sent <?= date('M j, Y', strtotime($project['invoice_sent_at'])) ?>">
+                    <iconify-icon icon="lucide:check-check" class="text-base"></iconify-icon>
+                </span>
+            <?php elseif (($project['status_type'] ?? '') === 'completed'): ?>
+                <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
+                      class="sm:hidden"
+                      onsubmit="return confirm('Send final invoice to client?');">
+                    <?= csrf_input() ?>
+                    <input type="hidden" name="action" value="send_invoice">
+                    <button type="submit"
+                            class="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-500 transition-all shadow-sm"
+                            title="Send Invoice">
+                        <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
+                    </button>
+                </form>
+            <?php else: ?>
+                <button type="button"
+                        disabled
+                        title="Available once project is marked complete"
+                        class="sm:hidden w-9 h-9 rounded-full bg-white/5 text-white/30 flex items-center justify-center cursor-not-allowed">
+                    <iconify-icon icon="lucide:receipt" class="text-base"></iconify-icon>
+                </button>
             <?php endif; ?>
+
+            <?php if (($project['status_type'] ?? '') !== 'completed'): ?>
             <form method="POST" action="project-detail.php?id=<?= $projectId ?>"
                   class="sm:hidden"
                   onsubmit="return confirm('Archive this project?');">
+                <?= csrf_input() ?>
                 <input type="hidden" name="action" value="archive">
                 <button type="submit"
                         class="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-[#DFF6E8] hover:bg-white/20 transition-all"
@@ -594,6 +665,7 @@ function file_icon(string $name): string
                     <iconify-icon icon="lucide:check-circle-2" class="text-base"></iconify-icon>
                 </button>
             </form>
+            <?php endif; ?>
         </div>
     </div>
 </header>
