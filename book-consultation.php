@@ -285,9 +285,9 @@ if ($inquiry_id_param > 0) {
             </a>
 
             <div class="flex items-center gap-6">
-                <div id="leadBadge" class="hidden sm:inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#DDEBFF] text-[#13224B] text-xs font-semibold">
+                <div id="leadBadge" class="hidden items-center gap-2 px-3 py-1 rounded-full bg-[#DDEBFF] text-[#13224B] text-xs font-semibold">
                     <iconify-icon icon="lucide:user-check" class="text-[#4C6CCB]"></iconify-icon>
-                    <span id="leadBadgeText">Maria Santos (Pesolink)</span>
+                    <span id="leadBadgeText"></span>
                 </div>
                 <a href="<?= home_url() ?>" class="flex items-center gap-2 text-sm text-[#4b4b4b] hover:text-[#4C6CCB] transition-colors font-medium">
                     <iconify-icon icon="lucide:arrow-left"></iconify-icon>
@@ -338,11 +338,11 @@ if ($inquiry_id_param > 0) {
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-bold text-[#8890AA] mb-1">Your Full Name *</label>
-                            <input type="text" id="coldName" placeholder="Maria Santos" class="input-field w-full px-3.5 py-2.5 rounded-xl text-sm font-medium">
+                            <input type="text" id="coldName" placeholder="e.g. Maria Santos" class="input-field w-full px-3.5 py-2.5 rounded-xl text-sm font-medium">
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-[#8890AA] mb-1">Email Address *</label>
-                            <input type="email" id="coldEmail" placeholder="maria@pesolink.com" class="input-field w-full px-3.5 py-2.5 rounded-xl text-sm font-medium">
+                            <input type="email" id="coldEmail" placeholder="e.g. maria@company.com" class="input-field w-full px-3.5 py-2.5 rounded-xl text-sm font-medium">
                         </div>
                     </div>
                 </div>
@@ -643,11 +643,11 @@ if ($inquiry_id_param > 0) {
                     <div class="flex items-center justify-between pb-5 border-b border-[rgba(19,34,75,0.08)]">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 rounded-full bg-gradient-soft text-white flex items-center justify-center font-bold text-base" id="leadInitials">
-                                MS
+                                --
                             </div>
                             <div>
-                                <h3 class="text-base font-bold text-[#13224B]" id="reviewLeadName">Maria Santos</h3>
-                                <p class="text-xs text-[#8890AA]" id="reviewLeadEmail">maria@pesolink.com</p>
+                                <h3 class="text-base font-bold text-[#13224B]" id="reviewLeadName">Guest Participant</h3>
+                                <p class="text-xs text-[#8890AA]" id="reviewLeadEmail">Not provided</p>
                             </div>
                         </div>
                         <span class="px-3 py-1 bg-[#DDEBFF] text-[#13224B] text-[11px] font-bold rounded-full">
@@ -821,7 +821,9 @@ if ($inquiry_id_param > 0) {
                     bookingState.service = dbInquiry.service || dbInquiry.project_type;
                 }
                 document.getElementById('leadBadgeText').innerText = `${bookingState.clientName} (Inquiry)`;
-                document.getElementById('leadBadge').classList.remove('hidden');
+                const badge = document.getElementById('leadBadge');
+                badge.classList.remove('hidden');
+                badge.classList.add('sm:inline-flex');
             } else if (inquiryId) {
                 const urlName = urlParams.get('name');
                 const urlEmail = urlParams.get('email');
@@ -832,14 +834,22 @@ if ($inquiry_id_param > 0) {
                 if (urlService) bookingState.service = urlService;
 
                 document.getElementById('leadBadgeText').innerText = `${bookingState.clientName || 'Lead'} (Inquiry)`;
-                document.getElementById('leadBadge').classList.remove('hidden');
+                const badge = document.getElementById('leadBadge');
+                badge.classList.remove('hidden');
+                badge.classList.add('sm:inline-flex');
             } else if (isClientLoggedIn && sessionClientName) {
                 bookingState.clientName = sessionClientName;
                 bookingState.clientEmail = sessionClientEmail;
                 document.getElementById('leadBadgeText').innerText = `${sessionClientName} (Client)`;
-                document.getElementById('leadBadge').classList.remove('hidden');
+                const badge = document.getElementById('leadBadge');
+                badge.classList.remove('hidden');
+                badge.classList.add('sm:inline-flex');
             } else {
-                // Show cold visitor fields
+                // Cold visitor: ensure badge is completely hidden and show input fields
+                const badge = document.getElementById('leadBadge');
+                badge.classList.add('hidden');
+                badge.classList.remove('sm:inline-flex');
+                document.getElementById('leadBadgeText').innerText = '';
                 document.getElementById('inlineLeadFields').classList.remove('hidden');
             }
 

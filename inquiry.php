@@ -292,7 +292,7 @@ if ($is_client_user) {
                             <p id="err-projectType" class="text-xs text-red-500 mt-1.5 font-medium hidden"></p>
                         </div>
                         <div>
-                            <label for="budget" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Budget Range (₱ PHP) *</label>
+                            <label for="budget" class="block text-xs font-bold uppercase tracking-wider text-[#8890AA] mb-2">Budget Range ($ USD) *</label>
                             <select id="budget" required class="input-field w-full px-4 py-3.5 rounded-xl text-sm font-medium cursor-pointer">
                                 <option value="" disabled selected>Select budget range</option>
                                 <option value="Under $50,000">Under $50,000</option>

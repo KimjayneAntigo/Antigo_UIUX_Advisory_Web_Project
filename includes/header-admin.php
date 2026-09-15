@@ -36,9 +36,7 @@ $adminInitials = strtoupper(substr($parts[0], 0, 1) . (isset($parts[1]) ? substr
             <div class="h-6 w-[1px] bg-[rgba(19,34,75,0.08)] hidden sm:block"></div>
 
             <div class="flex items-center gap-2.5">
-                <div class="w-9 h-9 rounded-full bg-gradient-to-r from-[#4C6CCB] to-[#6C5BB5] text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                    <?= $adminInitials ?>
-                </div>
+                <img src="<?= $base ?>images/profile.png" alt="<?= $adminName ?>" class="w-9 h-9 rounded-full object-cover shadow-sm border border-[rgba(19,34,75,0.12)]">
                 <div class="hidden lg:flex flex-col text-left">
                     <span class="text-xs font-bold text-[#13224B] leading-none"><?= $adminName ?></span>
                     <span class="text-[10px] text-[#6C5BB5] font-semibold mt-0.5">Studio Admin</span>

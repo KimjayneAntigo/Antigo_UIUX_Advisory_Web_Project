@@ -24,7 +24,9 @@ $navItems = [
 
   <!-- Logo  -->
   <div class="flex items-center gap-3 px-5 pt-6 pb-4">
-    <div class="logo-mark">A</div>
+    <div class="w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-sm flex-shrink-0">
+      <img src="<?= $base ?>images/antigo-mark.png?v=2.0" alt="Antigo Logo" class="w-full h-full object-contain">
+    </div>
     <div>
       <div class="logo-text-word">Antigo</div>
       <div class="logo-text-sub">UI/UX Advisory</div>

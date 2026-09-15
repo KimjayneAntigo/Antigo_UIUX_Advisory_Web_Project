@@ -213,7 +213,7 @@ $flash = $_GET['msg'] ?? '';
 
                 <div class="relative z-10 pt-8 mt-8 border-t border-white/10">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold text-xs">KA</div>
+                        <img src="images/profile.png" alt="Kimberly Jayne Antigo" class="w-10 h-10 rounded-full object-cover border-2 border-white/20 shadow-sm flex-shrink-0">
                         <div>
                             <div class="text-sm font-bold">Kimberly Jayne Antigo</div>
                             <div class="text-xs text-white/70">Founder &amp; Principal Consultant</div>

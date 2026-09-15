@@ -265,9 +265,7 @@ try {
 
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-gradient-to-r from-[#4C6CCB] to-[#6C5BB5] text-white flex items-center justify-center font-bold text-sm">
-                        KA
-                    </div>
+                    <img src="images/profile.png" alt="<?= htmlspecialchars($_SESSION['user_name'] ?? 'Kimberly Jayne Antigo') ?>" class="w-10 h-10 rounded-full object-cover border-2 border-white/20 shadow-sm">
                     <div class="hidden sm:flex flex-col">
                         <span class="text-xs font-bold text-white"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Kimberly Jayne Antigo') ?></span>
                         <span class="text-[10px] text-[#DDEBFF]">Admin &amp; Lead Consultant</span>

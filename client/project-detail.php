@@ -703,9 +703,7 @@ $stageIndex = match($currentPhase) {
             <h3 class="text-sm font-bold uppercase tracking-wider text-[#8890AA] mb-4">Assigned Lead Designer</h3>
 
             <div class="flex items-center gap-3 mb-4">
-              <div class="w-12 h-12 rounded-full bg-gradient-to-r from-[#4C6CCB] to-[#6C5BB5] text-white flex items-center justify-center font-bold text-sm shadow-md">
-                KA
-              </div>
+              <img src="../images/profile.png" alt="<?= htmlspecialchars($designer['name'] ?? 'Kimberly Jayne Antigo', ENT_QUOTES, 'UTF-8') ?>" class="w-12 h-12 rounded-full object-cover shadow-md border-2 border-white/80 flex-shrink-0">
               <div>
                 <h4 class="text-sm font-extrabold text-[#13224B]">
                   <?= htmlspecialchars($designer['name'] ?? 'Kimberly Jayne Antigo', ENT_QUOTES, 'UTF-8') ?>

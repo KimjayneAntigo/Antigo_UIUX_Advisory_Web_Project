@@ -42,7 +42,9 @@ $navItems = [
 
   <!-- Logo  -->
   <div class="flex items-center gap-3 px-5 pt-6 pb-4">
-    <div class="logo-mark">A</div>
+    <div class="w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-sm flex-shrink-0">
+      <img src="<?= $base ?>images/antigo-mark.png?v=2.0" alt="Antigo Logo" class="w-full h-full object-contain">
+    </div>
     <div>
       <div class="logo-text-word">Antigo</div>
       <div class="logo-text-sub">UI/UX Advisory</div>
@@ -95,13 +97,12 @@ $navItems = [
   <!-- User footer -->
   <div class="px-4 pb-5 pt-4 mt-auto" style="border-top:1px solid rgba(255,255,255,0.08);">
     <div class="flex items-center gap-3 mb-3">
-      <!-- Avatar with initials -->
-      <div
-        class="flex items-center justify-center rounded-full text-xs font-bold text-white flex-shrink-0"
-        style="width:34px;height:34px;background:linear-gradient(135deg,#6C5BB5,#4C6CCB);"
+      <!-- Profile picture -->
+      <img
+        src="<?= $base ?>images/profile.png"
+        alt="<?= $userName ?>"
+        class="w-[34px] h-[34px] rounded-full object-cover flex-shrink-0 border border-white/20 shadow-sm"
       >
-        <?= $initials ?>
-      </div>
       <div class="overflow-hidden">
         <p class="text-sm font-semibold text-white truncate leading-tight"><?= $userName ?></p>
         <p class="text-xs truncate" style="color:rgba(255,255,255,0.45);"><?= $userEmail ?></p>
