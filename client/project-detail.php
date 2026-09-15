@@ -195,16 +195,10 @@ $stageIndex = match($currentPhase) {
         }
     </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen bg-[#F4F6F8]">
+  <?php $activePage = 'projects'; require_once __DIR__ . '/../includes/header-client.php'; ?>
 
-  <!-- Client Sidebar Shell -->
-  <?php require_once __DIR__ . '/../includes/sidebar-client.php'; ?>
-
-  <!-- Main Content Wrapper -->
-  <div class="main-content">
-    <?php require_once __DIR__ . '/../includes/header-client.php'; ?>
-
-    <main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+  <main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
       <!-- Breadcrumbs & Header -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -729,7 +723,6 @@ $stageIndex = match($currentPhase) {
       </div>
 
     </main>
-  </div>
 
   <script>
     // Auto-scroll chat to latest message

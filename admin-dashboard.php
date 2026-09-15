@@ -250,33 +250,8 @@ try {
 </head>
 <body class="min-h-screen flex flex-col">
 
-    <!-- Admin Top Nav -->
-    <header class="w-full bg-[#13224B] text-white sticky top-0 z-50 shadow-md">
-        <div class="max-w-[1440px] mx-auto px-6 lg:px-10 h-20 flex items-center justify-between">
-            <a href="<?= home_url() ?>" class="logo">
-                <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center p-1.5 shadow-sm">
-                    <img src="images/antigo-mark.png?v=2.0" alt="Antigo Logo" class="w-full h-full object-contain">
-                </div>
-                <div class="logo-text">
-                    <div class="word">ANTIGO</div>
-                    <div class="sub">STUDIO COMMAND CENTER</div>
-                </div>
-            </a>
-
-            <div class="flex items-center gap-4">
-                <div class="flex items-center gap-3">
-                    <img src="images/profile.png" alt="<?= htmlspecialchars($_SESSION['user_name'] ?? 'Kimberly Jayne Antigo') ?>" class="w-10 h-10 rounded-full object-cover border-2 border-white/20 shadow-sm">
-                    <div class="hidden sm:flex flex-col">
-                        <span class="text-xs font-bold text-white"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Kimberly Jayne Antigo') ?></span>
-                        <span class="text-[10px] text-[#DDEBFF]">Admin &amp; Lead Consultant</span>
-                    </div>
-                    <a href="logout.php" title="Log Out" class="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors">
-                        <iconify-icon icon="lucide:log-out" class="text-base"></iconify-icon>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </header>
+    <!-- Admin Top Nav (Horizontal Navigation Bar) -->
+    <?php $activePage = 'overview'; require_once __DIR__ . '/includes/header-admin.php'; ?>
 
     <!-- Flash Messages -->
     <div class="max-w-[1440px] mx-auto px-6 lg:px-10 pt-6 w-full">

@@ -123,75 +123,55 @@ $pageTitle = $pageTitle ?? 'Antigo UI/UX Advisory';
     box-shadow: 0 0 0 3px rgba(76, 108, 203, 0.15);
   }
 
-  /* Sidebar */
+  /* Sidebar (deprecated in favor of top horizontal nav) */
   .sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 240px;
-    min-height: 100vh;
-    background-color: var(--navy);
-    display: flex;
-    flex-direction: column;
-    z-index: 50;
-    overflow-y: auto;
+    display: none !important;
   }
-
-  /*Sidebar links */
-  .sidebar-link {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    padding: 0.625rem 1rem;
-    border-radius: 0.5rem;
-    color: rgba(255, 255, 255, 0.65);
-    font-size: 0.875rem;
-    text-decoration: none;
-    transition: background 0.15s, color 0.15s;
-  }
-  .sidebar-link:hover  { background: rgba(255, 255, 255, 0.08); color: #fff; }
-  .sidebar-link.active { background: rgba(255, 255, 255, 0.12); color: #fff; font-weight: 600; }
 
   /* Main content */
   .main-content {
-    margin-left: 240px;
-    min-height: 100vh;
-    padding: 2rem;
+    margin-left: 0;
+    min-height: calc(100vh - 68px);
+    padding: 0;
+    width: 100%;
   }
 
-  /* Logo */
-  .logo-mark {
-    width: 36px;
-    height: 36px;
-    background: linear-gradient(135deg, var(--violet), var(--blue));
-    border-radius: 8px;
-    display: flex;
+  /* Horizontal Top Nav Links */
+  .nav-link-top {
+    position: relative;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    font-weight: 800;
-    font-size: 1rem;
-    color: #fff;
-    flex-shrink: 0;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    padding: 0.5rem 0.75rem;
+    text-decoration: none;
+    transition: color 0.2s ease;
   }
-  .logo-text-word {
-    font-size: 1.1rem;
+  .nav-link-top:hover {
+    color: #FFFFFF;
+  }
+  .nav-link-top.active {
+    color: #FFFFFF;
     font-weight: 700;
-    color: #fff;
-    line-height: 1.1;
-    letter-spacing: 0.01em;
   }
-  .logo-text-sub {
-    font-size: 0.65rem;
-    font-weight: 400;
-    color: rgba(255, 255, 255, 0.55);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    line-height: 1;
+  .nav-link-top.active::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 0.75rem;
+    right: 0.75rem;
+    height: 2px;
+    background-color: #4C6CCB;
+    border-radius: 2px;
   }
 
-  /* Responsive: hide sidebar on mobile */
+  /* Responsive adjustments */
   @media (max-width: 768px) {
-    .sidebar      { display: none; }
-    .main-content { margin-left: 0; padding: 1rem; }
+    .main-content {
+      margin-left: 0;
+      padding: 0;
+    }
   }
 </style>

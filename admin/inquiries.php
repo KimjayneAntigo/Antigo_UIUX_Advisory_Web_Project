@@ -138,16 +138,15 @@ $totalPages = max(1, (int) ceil($totalRows / $perPage));
         .badge-lost       { background: #F4F6F8; color: #6b7280; border: 1px solid #e5e7eb; }
     </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen bg-[#F4F6F8]">
 
-  <!-- Admin Sidebar Shell -->
-  <?php require_once __DIR__ . '/../includes/sidebar-admin.php'; ?>
+  <!-- Top Horizontal Navbar -->
+  <?php 
+    $activePage = 'inquiries';
+    require_once __DIR__ . '/../includes/header-admin.php'; 
+  ?>
 
-  <!-- Main Content Wrapper -->
-  <div class="main-content">
-    <?php require_once __DIR__ . '/../includes/header-admin.php'; ?>
-
-    <main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+  <main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
       <!-- Flash Notification -->
       <?= render_flash() ?>
@@ -335,7 +334,6 @@ $totalPages = max(1, (int) ceil($totalRows / $perPage));
       </div>
 
     </main>
-  </div>
 
   <!-- Detail Modal -->
   <div id="inquiryDetailModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">

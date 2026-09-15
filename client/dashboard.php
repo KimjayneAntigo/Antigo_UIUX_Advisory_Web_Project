@@ -249,16 +249,10 @@ try {
         }
     </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen bg-[#F4F6F8]">
+  <?php $activePage = 'dashboard'; require_once __DIR__ . '/../includes/header-client.php'; ?>
 
-  <!-- Client Sidebar Shell -->
-  <?php require_once __DIR__ . '/../includes/sidebar-client.php'; ?>
-
-  <!-- Main Content Wrapper -->
-  <div class="main-content">
-    <?php require_once __DIR__ . '/../includes/header-client.php'; ?>
-
-    <main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
+  <main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
 
       <!-- Flash Notification -->
       <?= render_flash() ?>
@@ -787,7 +781,6 @@ try {
       </div>
 
     </main>
-  </div>
 
 </body>
 </html>

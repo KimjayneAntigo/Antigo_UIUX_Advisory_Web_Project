@@ -289,10 +289,17 @@ if ($inquiry_id_param > 0) {
                     <iconify-icon icon="lucide:user-check" class="text-[#4C6CCB]"></iconify-icon>
                     <span id="leadBadgeText"></span>
                 </div>
-                <a href="<?= home_url() ?>" class="flex items-center gap-2 text-sm text-[#4b4b4b] hover:text-[#4C6CCB] transition-colors font-medium">
-                    <iconify-icon icon="lucide:arrow-left"></iconify-icon>
-                    <span>Back to Home</span>
-                </a>
+                <?php if (is_logged_in()): ?>
+                    <a href="<?= ($_SESSION['role'] ?? '') === 'admin' ? 'admin-dashboard.php' : 'client/dashboard.php' ?>" class="flex items-center gap-2 text-sm text-[#4b4b4b] hover:text-[#4C6CCB] transition-colors font-semibold">
+                        <iconify-icon icon="lucide:arrow-left"></iconify-icon>
+                        <span>Back to Dashboard</span>
+                    </a>
+                <?php else: ?>
+                    <a href="<?= home_url() ?>" class="flex items-center gap-2 text-sm text-[#4b4b4b] hover:text-[#4C6CCB] transition-colors font-medium">
+                        <iconify-icon icon="lucide:arrow-left"></iconify-icon>
+                        <span>Back to Home</span>
+                    </a>
+                <?php endif; ?>
             </div>
         </nav>
     </header>

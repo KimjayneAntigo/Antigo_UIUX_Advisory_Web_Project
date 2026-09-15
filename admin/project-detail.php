@@ -544,10 +544,11 @@ function file_icon(string $name): string
         }
     </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen bg-[#F4F6F8]">
+<?php $activePage = 'projects'; require_once __DIR__ . '/../includes/header-admin.php'; ?>
 
-<!-- ══════════════════════ TOP NAV ═══════════════════════════════════════════ -->
-<header class="w-full bg-[#13224B] text-white sticky top-0 z-50 shadow-md">
+<!-- ══════════════════════ PROJECT SUB-BAR ═══════════════════════════════════════════ -->
+<div class="w-full bg-[#182859] text-white border-b border-white/10 shadow-sm">
     <div class="max-w-[1440px] mx-auto px-6 lg:px-10 h-[68px] flex items-center justify-between gap-4">
 
         <!-- Left: back + breadcrumb -->
@@ -705,7 +706,7 @@ function file_icon(string $name): string
             <?php endif; ?>
         </div>
     </div>
-</header>
+</div>
 
 <!-- ═════════════════════ MAIN CONTENT ══════════════════════════════════════ -->
 <main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-8 space-y-7">
