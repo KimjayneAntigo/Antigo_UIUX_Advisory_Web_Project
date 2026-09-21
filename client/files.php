@@ -1,8 +1,4 @@
 <?php
-/**
- * Client Deliverables & Design Files Hub.
- * Dedicated standalone page for client to browse and download Figma files, specs, and design audits.
- */
 
 require_once __DIR__ . '/../includes/auth-check-client.php';
 require_once __DIR__ . '/../config/db.php';

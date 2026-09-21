@@ -1,7 +1,6 @@
 <?php
 /**
  * Client Projects Workspace Hub.
- * Dedicated standalone page for client to track their design projects, progress steppers, and pending intake requests.
  */
 
 require_once __DIR__ . '/../includes/auth-check-client.php';

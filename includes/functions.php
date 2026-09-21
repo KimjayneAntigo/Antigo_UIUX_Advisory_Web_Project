@@ -1,34 +1,17 @@
 <?php
-/**
- * Shared utility functions for the Antigo UI/UX Advisory Web App.
- */
 
 require_once __DIR__ . '/routing.php';
 
-/**
- * Trim and HTML-encode a string to prevent XSS.
- */
 function sanitize_input(string $data): string
 {
     return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
 }
 
-/**
- * Store a flash message in the session.
- *
- * @param string $msg  The message text.
- * @param string $type One of: success | error | warning | info
- */
 function flash_message(string $msg, string $type = 'success'): void
 {
     $_SESSION['flash'] = ['message' => $msg, 'type' => $type];
 }
 
-/**
- * Retrieve and clear the flash message from the session.
- *
- * @return array{message:string,type:string}|null
- */
 function get_flash_message(): ?array
 {
     if (!isset($_SESSION['flash'])) {
@@ -39,9 +22,6 @@ function get_flash_message(): ?array
     return $flash;
 }
 
-/**
- * Render a Tailwind-styled flash banner HTML string, or empty string if none.
- */
 function render_flash(): string
 {
     $flash = get_flash_message();
@@ -105,22 +85,11 @@ function render_flash(): string
 HTML;
 }
 
-/**
- * Format a number as USD currency.
- *
- * @param int|float $amount
- * @return string  e.g. "$250,000"
- */
 function format_currency(int|float $amount): string
 {
     return '$' . number_format((float)$amount, 0);
 }
 
-/**
- * Return a human-readable "time ago" string.
- *
- * @param string $datetime MySQL DATETIME string or any strtotime-compatible value.
- */
 function time_ago(string $datetime): string
 {
     $time  = strtotime($datetime);
@@ -147,11 +116,6 @@ function time_ago(string $datetime): string
     return date('M j, Y', $time);
 }
 
-/**
- * Return a styled <span> badge for a given status string.
- *
- * @param string $status  e.g. 'new', 'converted', 'confirmed', 'in_design'
- */
 function status_badge(string $status): string
 {
     // Map status → [bg, text, border?]
@@ -177,17 +141,11 @@ function status_badge(string $status): string
     return "<span class=\"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold {$bgCls} {$txtCls}\"{$inline}>{$label}</span>";
 }
 
-/**
- * Convenience alias for flash_message with ($type, $msg) parameter order.
- */
 function set_flash(string $type, string $msg): void
 {
     flash_message($msg, $type);
 }
 
-/**
- * Safe HTTP header redirect with immediate exit.
- */
 function safe_redirect(string $url): void
 {
     if (!headers_sent()) {
@@ -198,9 +156,6 @@ function safe_redirect(string $url): void
     exit;
 }
 
-/**
- * Format bytes into readable string (B, KB, MB, GB).
- */
 function format_filesize(int $bytes): string
 {
     if ($bytes < 1024) {
@@ -215,9 +170,6 @@ function format_filesize(int $bytes): string
     return round($bytes / 1073741824, 1) . ' GB';
 }
 
-/**
- * Generate or retrieve a CSRF token for the current session.
- */
 function generate_csrf_token(): string
 {
     if (session_status() === PHP_SESSION_NONE) {
@@ -229,9 +181,6 @@ function generate_csrf_token(): string
     return $_SESSION['csrf_token'];
 }
 
-/**
- * Verify that a submitted CSRF token matches the session token.
- */
 function verify_csrf_token(?string $token): bool
 {
     if (session_status() === PHP_SESSION_NONE) {
@@ -243,22 +192,12 @@ function verify_csrf_token(?string $token): bool
     return hash_equals($_SESSION['csrf_token'], $token);
 }
 
-/**
- * Render a hidden HTML input containing the CSRF token.
- */
 function csrf_input(): string
 {
     $token = htmlspecialchars(generate_csrf_token(), ENT_QUOTES, 'UTF-8');
     return '<input type="hidden" name="csrf_token" value="' . $token . '">';
 }
 
-/**
- * Convert an existing inquiry into an active project in a database transaction.
- *
- * @param PDO $pdo
- * @param int $inquiryId
- * @return array{success:bool, project_id?:int, project_code?:string, error?:string}
- */
 function convert_inquiry_to_project(PDO $pdo, int $inquiryId): array
 {
     if ($inquiryId <= 0) {
@@ -375,19 +314,11 @@ function convert_inquiry_to_project(PDO $pdo, int $inquiryId): array
     }
 }
 
-/**
- * Format standard computed payment reference code.
- * Matches PAY-00001 pattern without redundant storage.
- */
 function format_payment_ref(int $id): string
 {
     return 'PAY-' . str_pad((string)$id, 5, '0', STR_PAD_LEFT);
 }
 
-/**
- * Parse pure numeric amount from project budget string.
- * Handles currency symbols ($/₱), commas, and ranges (extracts starting value).
- */
 function parse_budget_amount(string $budget): float
 {
     if (preg_match('/(\d[\d,]*(?:\.\d+)?)/', $budget, $matches)) {
@@ -396,9 +327,6 @@ function parse_budget_amount(string $budget): float
     return 0.00;
 }
 
-/**
- * Fetch the latest payment record for a given project.
- */
 function get_project_latest_payment(PDO $pdo, int $projectId): ?array
 {
     if ($projectId <= 0) {
@@ -415,9 +343,6 @@ function get_project_latest_payment(PDO $pdo, int $projectId): ?array
     }
 }
 
-/**
- * Count the number of currently pending payments awaiting admin review.
- */
 function count_pending_payments(PDO $pdo): int
 {
     try {
@@ -429,9 +354,6 @@ function count_pending_payments(PDO $pdo): int
     }
 }
 
-/**
- * Format any currency value or string as USD ($).
- */
 function format_usd(mixed $val): string
 {
     if ($val === null || $val === '') {
@@ -446,4 +368,4 @@ function format_usd(mixed $val): string
     }
     $num = is_numeric($val) ? (float)$val : parse_budget_amount((string)$val);
     return '$' . number_format($num);
-}
+}

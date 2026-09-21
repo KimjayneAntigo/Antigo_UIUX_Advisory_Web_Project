@@ -1,7 +1,6 @@
 <?php
 /**
  * Client Consultation & Scheduling Hub.
- * Dedicated standalone page for client to track upcoming advisory sessions, view calendar slots, and book consultations.
  */
 
 require_once __DIR__ . '/../includes/auth-check-client.php';

@@ -1,7 +1,6 @@
 <?php
 /**
  * Client Portal Dashboard & Executive Overview.
- * High-level project spotlight, deliverable downloads, upcoming consultations, and account settings.
  */
 
 require_once __DIR__ . '/../includes/auth-check-client.php';
