@@ -257,7 +257,7 @@ $flash = $_GET['msg'] ?? '';
                     <!-- Form — POSTs to this same page -->
                     <form method="POST" action="login.php" class="space-y-5" novalidate>
                         <?= csrf_input() ?>
-                        <!-- Client-side validation error (JS only, no server round-trip needed) -->
+                        <!-- Client-side validation error -->
                         <div id="js-error" class="hidden p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-medium"></div>
 
                         <input type="hidden" name="role" id="intended_role" value="<?= htmlspecialchars($selected_role, ENT_QUOTES, 'UTF-8') ?>">
@@ -302,7 +302,7 @@ $flash = $_GET['msg'] ?? '';
         </div>
     </main>
 
-    <!-- Forgot Password Modal (frontend-only wire up email handler) -->
+    <!-- Forgot Password Modal -->
     <div id="forgotModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-md w-full p-6 sm:p-8 border border-[rgba(19,34,75,0.08)] shadow-2xl relative">
             <button onclick="closeForgotModal()" class="absolute right-4 top-4 text-[#8890AA] hover:text-[#13224B] p-2">

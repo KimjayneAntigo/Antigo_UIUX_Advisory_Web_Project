@@ -1,6 +1,5 @@
 <?php
 /**
- * scratch/test_invoice_flow.php
  * Automated verification test for Invoice-Gated Payment Flow.
  */
 
@@ -21,7 +20,7 @@ function assert_true(string $name, bool $cond, string $msg = ''): void {
 
 echo "=== Running Invoice-Gated Payment Flow Tests ===\n\n";
 
-// 1. Verify schema: invoice_sent_at column exists on projects
+// Verify schema: invoice_sent_at column exists on projects
 $colStmt = $pdo->query("SHOW COLUMNS FROM projects LIKE 'invoice_sent_at'");
 $col = $colStmt->fetch();
 assert_true('Schema: projects.invoice_sent_at exists', !empty($col), "Type: " . ($col['Type'] ?? 'none'));
@@ -43,7 +42,7 @@ $testProjectId = (int)$pdo->lastInsertId();
 assert_true('Setup: Created test project', $testProjectId > 0, "Project ID: {$testProjectId}");
 
 try {
-    // 2. State: In Progress / In Design
+    // State: In Progress / In Design
     // Query project
     $p = $pdo->query("SELECT * FROM projects WHERE id = {$testProjectId}")->fetch();
     assert_true('State 1: Project status_type is in_design', $p['status_type'] === 'in_design');
@@ -54,7 +53,7 @@ try {
     $canPayState1 = (($p['status_type'] ?? '') === 'completed' && !empty($p['invoice_sent_at']));
     assert_true('Backend Gate: Payment disallowed when not completed', $canPayState1 === false);
 
-    // 3. Mark Complete, but do NOT send invoice yet
+    // Mark Complete, but do NOT send invoice yet
     $upd = $pdo->prepare("UPDATE projects SET status_type = 'completed', status = 'Completed', updated_at = NOW() WHERE id = ?");
     $upd->execute([$testProjectId]);
     $p = $pdo->query("SELECT * FROM projects WHERE id = {$testProjectId}")->fetch();
@@ -70,7 +69,7 @@ try {
     $bStmt->execute(['uid' => $clientId, 'pid' => $testProjectId]);
     assert_true('Dashboard Banner: Not visible before invoice is sent', empty($bStmt->fetch()));
 
-    // 4. Admin sends invoice
+    // Admin sends invoice
     $invStmt = $pdo->prepare("UPDATE projects SET invoice_sent_at = NOW(), updated_at = NOW() WHERE id = ? AND status_type = 'completed'");
     $invStmt->execute([$testProjectId]);
     assert_true('Action: Admin sends invoice', $invStmt->rowCount() > 0);
@@ -87,7 +86,7 @@ try {
     $bannerProj = $bStmt->fetch();
     assert_true('Dashboard Banner: Visible once invoice is sent and awaiting payment', !empty($bannerProj) && (int)$bannerProj['id'] === $testProjectId);
 
-    // 5. Submit Payment declaration
+    // Submit Payment declaration
     $payableAmount = parse_budget_amount($p['budget']);
     assert_true('Budget parser: Correctly parsed $2,500.00', $payableAmount === 2500.00);
 
@@ -104,7 +103,7 @@ try {
     $latestPay = get_project_latest_payment($pdo, $testProjectId);
     assert_true('Admin Hub: Found latest payment', !empty($latestPay) && $latestPay['status'] === 'pending');
 
-    // 6. Admin verifies payment
+    // Admin verifies payment
     $vStmt = $pdo->prepare("UPDATE payments SET status = 'verified', verified_at = NOW() WHERE id = ?");
     $vStmt->execute([$paymentId]);
     assert_true('Action: Admin verifies payment', $vStmt->rowCount() > 0);

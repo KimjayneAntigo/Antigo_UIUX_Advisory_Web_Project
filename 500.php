@@ -1,5 +1,5 @@
 <?php
-// 500.php — custom internal server / database error page for Antigo Web App
+//Custom internal server / database error page 
 http_response_code(500);
 
 // Log error only, do not display raw traces to visitor

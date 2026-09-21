@@ -177,4 +177,3 @@ CREATE TABLE IF NOT EXISTS `payments` (
     CONSTRAINT `fk_payments_user`    FOREIGN KEY (`user_id`)    REFERENCES `users`(`id`)    ON DELETE CASCADE,
     INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-

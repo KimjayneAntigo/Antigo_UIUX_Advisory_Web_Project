@@ -1,6 +1,5 @@
 <?php
 /**
- * includes/functions.php
  * Shared utility functions for the Antigo UI/UX Advisory Web App.
  */
 
@@ -429,6 +428,3 @@ function count_pending_payments(PDO $pdo): int
         return 0;
     }
 }
-
-
-

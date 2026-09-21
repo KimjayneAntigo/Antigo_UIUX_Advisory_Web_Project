@@ -1,6 +1,5 @@
 <?php
 /**
- * admin/profile.php
  * Admin Profile & Studio Account Settings
  */
 
@@ -24,7 +23,7 @@ if (!$adminUser) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    // 1. Update Profile Info
+    // Update Profile Info
     if ($action === 'update_profile') {
         if (!verify_csrf()) {
             set_flash('error', 'Security token expired. Please try again.');
@@ -52,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         safe_redirect('profile.php');
     }
 
-    // 2. Change Password
+    // Change Password
     if ($action === 'change_password') {
         if (!verify_csrf()) {
             set_flash('error', 'Security token expired. Please try again.');
@@ -122,8 +121,8 @@ $pageTitle = 'Admin Profile & Settings';
         <!-- Flash Messages -->
         <?= render_flash() ?>
 
-        <!-- Page Header -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[rgba(19,34,75,0.08)] pb-5">
+        <!-- Page Header/redirection to dashboard -->
+        <!-- <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[rgba(19,34,75,0.08)] pb-5">
             <div>
                 <h1 class="text-2xl font-extrabold text-[#13224B]">Studio Admin Profile &amp; Settings</h1>
                 <p class="text-xs text-[#8890AA] mt-1">Manage your administrator account credentials, studio identity, and security preferences.</p>
@@ -133,7 +132,7 @@ $pageTitle = 'Admin Profile & Settings';
                     <iconify-icon icon="lucide:arrow-left" class="text-sm"></iconify-icon>
                     <span>Back to Dashboard</span>
                 </a>
-            </div>
+            </div> -->
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">

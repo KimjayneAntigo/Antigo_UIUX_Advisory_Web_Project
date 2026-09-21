@@ -1,6 +1,5 @@
 <?php
 /**
- * cancel-project-handler.php
  * Handles project cancellation by authenticated client or admin.
  * Preserves project history and sets status_type = 'cancelled'.
  */
@@ -16,7 +15,7 @@ $isJson = (
     (isset($_POST['format']) && $_POST['format'] === 'json')
 );
 
-// 1. Authentication Check
+//  Authentication Check
 if (!isset($_SESSION['user_id']) || empty($_SESSION['role'])) {
     if ($isJson) {
         http_response_code(401);
@@ -42,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     safe_redirect(home_url());
 }
 
-// 2. CSRF Token Verification
+// CSRF Token Verification
 if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
     if ($isJson) {
         http_response_code(403);
@@ -54,7 +53,7 @@ if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
     safe_redirect(home_url());
 }
 
-// 3. Project ID Validation
+// Project ID Validation
 $projectId = (int) ($_POST['project_id'] ?? 0);
 if ($projectId <= 0) {
     if ($isJson) {
@@ -68,7 +67,7 @@ if ($projectId <= 0) {
 }
 
 try {
-    // 4. Query project row
+    // Query project row
     $stmt = $pdo->prepare('SELECT id, user_id, project_code, title, status_type FROM projects WHERE id = ? LIMIT 1');
     $stmt->execute([$projectId]);
     $project = $stmt->fetch();
@@ -84,7 +83,7 @@ try {
         safe_redirect(home_url());
     }
 
-    // 5. Role-based authorization (Anti-IDOR for clients)
+    // Role-based authorization (Anti-IDOR for clients)
     if ($currentUserRole === 'client') {
         if ((int)($project['user_id'] ?? 0) !== $currentUserId) {
             error_log("IDOR Security Alert: Client User {$currentUserId} attempted to cancel Project {$projectId} owned by User " . ($project['user_id'] ?? 'null'));
@@ -99,7 +98,7 @@ try {
         }
     }
 
-    // 6. State Guard: Cannot cancel completed or already cancelled projects
+    // State Guard: Cannot cancel completed or already cancelled projects
     $currentStatusType = $project['status_type'] ?? '';
     if ($currentStatusType === 'cancelled') {
         $msg = 'This project is already cancelled.';
@@ -131,7 +130,7 @@ try {
         safe_redirect($returnUrl);
     }
 
-    // 7. Sanitize optional cancellation reason (max 500 characters)
+    // Sanitize optional cancellation reason (max 500 characters)
     $reason = trim($_POST['cancellation_reason'] ?? $_POST['reason'] ?? '');
     if ($reason !== '') {
         $reason = mb_substr(strip_tags($reason), 0, 500);
@@ -139,7 +138,7 @@ try {
         $reason = null;
     }
 
-    // 8. Execute Cancellation
+    // Execute Cancellation
     $updStmt = $pdo->prepare(
         "UPDATE projects
          SET status_type = 'cancelled',

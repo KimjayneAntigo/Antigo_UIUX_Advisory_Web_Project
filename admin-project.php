@@ -1,6 +1,5 @@
 <?php
 /**
- * admin-project.php (Root proxy)
  * Forwards requests to the canonical admin/project-detail.php.
  */
 require_once __DIR__ . '/config/session.php';

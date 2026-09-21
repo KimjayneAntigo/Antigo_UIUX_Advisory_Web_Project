@@ -150,7 +150,6 @@ if (empty($guest_name) && $inquiry_id) {
 $durationStr = $duration . ' min';
 
 // Database insert — two-step transaction for booking_code (UNIQUE NOT NULL) ─
-// Step 1: INSERT with 'PENDING' placeholder; Step 2: UPDATE to BKG-XXXX.
 try {
     $pdo->beginTransaction();
 

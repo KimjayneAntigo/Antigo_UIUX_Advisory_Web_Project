@@ -1,6 +1,5 @@
 <?php
 /**
- * includes/routing.php
  * Central routing helpers for Antigo UI/UX Advisory Web App.
  * Single source of truth for "where is home".
  */
@@ -21,9 +20,6 @@ if (session_status() === PHP_SESSION_NONE) {
 
 /**
  * Returns the contextual home URL based on the current user's session role.
- * - Guest: home.php
- * - Admin: admin-dashboard.php
- * - Client: client-dashboard.php
  * Automatically handles subdirectory paths (e.g. inside /client/ or /admin/).
  */
 function home_url(): string {

@@ -9,12 +9,12 @@ if (is_logged_in()) {
 }
 
 require_once 'config/db.php';
-// If already logged in, skip login and redirect to the proper dashboard.
+// skip login and redirect to the proper dashboard.
 // Only attach guest records created in this current browser session.
 $pending_inquiry_id = $_SESSION['pending_link_inquiry_id'] ?? null;
 $pending_booking_id = $_SESSION['pending_link_booking_id'] ?? null;
 
-// Pre-fill name/email from the pending inquiry/booking for UX convenience
+// Pre-fill name/email 
 $prefill_name  = '';
 $prefill_email = '';
 
@@ -56,8 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
         $stmt->execute([$email]);
         if ($stmt->fetch()) {
-            // Redirect to login with a flash message rather than exposing the
-            // error inline
+            // Redirect to login with a message to prevent account duplication
             header('Location: login.php?msg=account_exists');
             exit;
         }
@@ -65,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // INSERT NEW USER
         $hash = password_hash($password, PASSWORD_DEFAULT);
 
-       // Force 'client' role on the server to prevent attackers from injecting role='admin' to gain unauthorized privileges.
+       // Client role
         $stmt = $pdo->prepare(
             'INSERT INTO users (name, email, password_hash, role, created_at)
              VALUES (?, ?, ?, \'client\', NOW())'
@@ -74,8 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $new_user_id = (int) $pdo->lastInsertId();
 
         // TRUSTED-SESSION LINKING
-        // Link ONLY the session-stored IDs — NOT any historical records
-        // belonging to this email address
+        // Link ONLY the session-stored IDs
         if ($pending_inquiry_id) {
             $stmt = $pdo->prepare('UPDATE inquiries SET user_id = ? WHERE id = ? AND user_id IS NULL');
             $stmt->execute([$new_user_id, $pending_inquiry_id]);
@@ -88,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Clear pending-link values immediately after linking
         unset($_SESSION['pending_link_inquiry_id'], $_SESSION['pending_link_booking_id']);
 
-      // Issue a brand-new session ID and delete the old one to prevent session hijacking.
+      // prevent session hijacking.
         session_regenerate_id(true);
 
         $_SESSION['user_id']   = $new_user_id;
@@ -96,8 +94,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['name']      = $name;
         $_SESSION['email']     = $email;
         $_SESSION['role']      = 'client';
-
-       // Future task: Add CAPTCHA or request limits to block bot attacks and automated spam signups.
 
         header('Location: client/dashboard.php?welcome=1');
         exit;

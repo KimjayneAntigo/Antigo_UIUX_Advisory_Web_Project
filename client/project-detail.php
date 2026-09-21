@@ -1,6 +1,5 @@
 <?php
 /**
- * Client Portal — Project Detail Workspace.
  * Strictly verifies that the requested project belongs to $_SESSION['user_id'] (Anti-IDOR).
  */
 

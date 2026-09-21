@@ -1,5 +1,5 @@
 <?php
-// 404.php — custom not-found page for Antigo Web App
+// Custom not-found page 
 // Configure Apache/NGINX to serve this for 404 errors:
 http_response_code(404);
 

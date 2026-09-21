@@ -1,6 +1,5 @@
 <?php
 /**
- * scratch/test_http_invoice_flow.php
  * HTTP-level end-to-end test simulating Admin and Client browser sessions.
  */
 
@@ -96,7 +95,6 @@ $pid = (int)$pdo->lastInsertId();
 echo "Created Test Project ID: {$pid}\n";
 
 try {
-    // STEP A: Project in_design
     // Admin checks detail page
     $adminView = http_req("{$baseUrl}/admin/project-detail.php?id={$pid}", 'GET', null, $adminCookie);
     $hasDisabledButton = strpos($adminView['body'], 'Available once project is marked complete') !== false;
@@ -123,7 +121,7 @@ try {
     $payBlockedA = ($payAttempt1['code'] === 400 && strpos($resp1['error'] ?? '', 'invoice') !== false);
     echo "[TEST A4] Payment-handler rejects payment before completion & invoice (HTTP {$payAttempt1['code']}): " . ($payBlockedA ? "PASS" : "FAIL") . "\n";
 
-    // STEP B: Project marked complete, but invoice NOT sent
+    // Project marked complete, but invoice NOT sent
     $adminCsrf = extract_csrf($adminView['body']);
     $archiveReq = http_req("{$baseUrl}/admin/project-detail.php?id={$pid}", 'POST', [
         'action' => 'archive',
@@ -162,7 +160,7 @@ try {
     $payBlockedB = ($payAttempt2['code'] === 400 && strpos($resp2['error'] ?? '', 'invoice') !== false);
     echo "[TEST B6] Payment-handler rejects payment when complete but invoice not sent (HTTP {$payAttempt2['code']}): " . ($payBlockedB ? "PASS" : "FAIL") . "\n";
 
-    // STEP C: Admin sends the invoice
+    //Admin sends the invoice
     $adminCsrfB = extract_csrf($adminViewB['body']);
     $sendInvReq = http_req("{$baseUrl}/admin/project-detail.php?id={$pid}", 'POST', [
         'action' => 'send_invoice',
@@ -189,7 +187,7 @@ try {
     $hasPaymentFormC = strpos($clientViewC['body'], 'id="paymentSubmitForm"') !== false;
     echo "[TEST C5] Client project-detail displays payment declaration form: " . ($hasPaymentFormC ? "PASS" : "FAIL") . "\n";
 
-    // STEP D: Client submits payment declaration
+    // Client submits payment declaration
     $csrfClientC = extract_csrf($clientViewC['body']);
     $payAttempt3 = http_req("{$baseUrl}/payment-handler.php", 'POST', [
         'project_id' => $pid,
@@ -215,7 +213,7 @@ try {
     $hasInPaymentsHub = strpos($adminHub['body'], $resp3['reference_number']) !== false;
     echo "[TEST D4] Admin Payments Hub lists payment reference: " . ($hasInPaymentsHub ? "PASS" : "FAIL") . "\n";
 
-    // STEP E: Admin verifies payment
+    //Admin verifies payment
     $payId = (int)$pdo->query("SELECT id FROM payments WHERE project_id = {$pid}")->fetchColumn();
     $hubCsrf = extract_csrf($adminHub['body']);
     $verifyReq = http_req("{$baseUrl}/admin/payments.php", 'POST', [

@@ -1,6 +1,5 @@
 <?php
 /**
- * inquiry-handler.php
  * Inquiry form submission handler.
  * Accepts POST (AJAX or direct form); validates and returns JSON.
  */
@@ -113,7 +112,7 @@ if (!empty($field_errors)) {
     exit;
 }
 
-// File upload handling (optional)
+// File upload handling
 $storedFileName = null;
 if (!empty($_FILES['file']['name'])) {
     $file      = $_FILES['file'];
@@ -175,7 +174,7 @@ if (!empty($_FILES['file']['name'])) {
     }
 }
 
-// Normalized input for PDO storage (avoiding double-HTML encoding)
+// Normalized input for PDO storage 
 $dbName        = $name;
 $dbEmail       = $email;
 $dbPhone       = $phone;

@@ -1,7 +1,6 @@
 <?php
 /**
- * download.php
- * Secure role-based file streaming endpoint for Antigo WebApp.
+ * Role-based file streaming endpoint 
  * Verifies authentication and project ownership before sending file data.
  */
 

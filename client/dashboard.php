@@ -1,6 +1,5 @@
 <?php
 /**
- * Client Portal — Dashboard Overview.
  * Scoped strictly to the logged-in client's user_id to prevent IDOR access.
  */
 

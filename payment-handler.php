@@ -1,6 +1,5 @@
 <?php
 /**
- * payment-handler.php
  * Client manual payment submission endpoint.
  * Accepts POST only and returns JSON.
  */
@@ -28,7 +27,7 @@ if (!verify_csrf_token($csrfToken)) {
     exit;
 }
 
-// 1. Validate project_id
+// Validate project_id
 $projectId = (int) ($_POST['project_id'] ?? 0);
 if ($projectId <= 0) {
     http_response_code(400);
@@ -47,7 +46,7 @@ try {
         exit;
     }
 
-    // 2. IDOR check: Verify project belongs to current authenticated client
+    // Verify project belongs to current authenticated client
     $userId = (int) $_SESSION['user_id'];
     if ((int) ($project['user_id'] ?? 0) !== $userId) {
         error_log("IDOR Security Alert: User {$userId} attempted to submit payment for Project {$projectId} owned by User " . ($project['user_id'] ?? 'null'));
@@ -56,7 +55,7 @@ try {
         exit;
     }
 
-    // 3. Status check: Reject cancelled projects or incomplete/uninvoiced projects
+    // Status check: Reject cancelled projects or incomplete/uninvoiced projects
     if (($project['status_type'] ?? '') === 'cancelled') {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => 'This project has been cancelled and is no longer payable.']);
@@ -69,7 +68,7 @@ try {
         exit;
     }
 
-    // 4. Payment method whitelist
+    // Payment method whitelist
     $allowedMethods = ['GCash', 'Bank Transfer', 'Cash', 'Card'];
     $paymentMethod  = trim($_POST['payment_method'] ?? '');
     if (!in_array($paymentMethod, $allowedMethods, true)) {
@@ -78,7 +77,7 @@ try {
         exit;
     }
 
-    // 5. Compute amount server-side from project budget (never trust client payload)
+    // Compute amount server-side from project budget (never trust client payload)
     $amount = parse_budget_amount($project['budget'] ?? '');
     if ($amount <= 0) {
         http_response_code(400);
@@ -86,7 +85,7 @@ try {
         exit;
     }
 
-    // 6. Check there isn't already a pending or verified payment for this project
+    // Check there isn't already a pending or verified payment for this project
     $dupStmt = $pdo->prepare("SELECT id, status FROM payments WHERE project_id = ? AND status IN ('pending', 'verified') LIMIT 1");
     $dupStmt->execute([$projectId]);
     $existingPayment = $dupStmt->fetch();

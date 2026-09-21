@@ -1,6 +1,5 @@
 <?php
 /**
- * scratch/test_cancellation_flow.php
  * Comprehensive automated verification for Project Cancellation (Client + Admin).
  */
 
@@ -69,7 +68,7 @@ echo "========================================================\n";
 echo "=== Project Cancellation (Client + Admin) Test Suite ===\n";
 echo "========================================================\n\n";
 
-// --- 1. SCHEMA VERIFICATION ---
+// ---  SCHEMA VERIFICATION ---
 echo "--- 1. Database Schema Checks ---\n";
 $colStmt = $pdo->query("SHOW COLUMNS FROM projects LIKE 'status_type'");
 $colStatus = $colStmt->fetch();
@@ -87,7 +86,7 @@ assert_test('Schema: cancellation_reason column exists', !empty($colReason));
 $fkCheck = $pdo->query("SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = 'antigo_advisory_db' AND TABLE_NAME = 'projects' AND COLUMN_NAME = 'cancelled_by' AND REFERENCED_TABLE_NAME = 'users'")->fetch();
 assert_test('Schema: fk_projects_cancelled_by exists', !empty($fkCheck), $fkCheck['CONSTRAINT_NAME'] ?? 'missing');
 
-// --- 2. USER SETUP & AUTH PREP ---
+// --- USER SETUP & AUTH PREP ---
 echo "\n--- 2. Users Setup & Authentication ---\n";
 // Admin
 $adminUser = $pdo->query("SELECT * FROM users WHERE role = 'admin' LIMIT 1")->fetch();
@@ -144,7 +143,7 @@ $client2Csrf = extract_csrf($res['body']);
 $res = http_req("{$baseUrl}/admin-dashboard.php", 'GET', null, $adminCookie);
 $adminCsrf = extract_csrf($res['body']);
 
-// --- 3. CREATE TEST PROJECTS ---
+// --- CREATE TEST PROJECTS ---
 echo "\n--- 3. Creating Test Projects ---\n";
 $pdo->exec("DELETE FROM projects WHERE project_code LIKE 'PRJ-TEST-CANCEL%'");
 
@@ -178,7 +177,7 @@ $pdo->prepare("INSERT INTO project_messages (project_id, sender, role, message, 
 VALUES (?, 'Demo Client', 'client', 'Hello, this is a test pre-cancellation message.', NOW())")->execute([$projAId]);
 
 try {
-    // --- 4. GUEST / UNAUTHENTICATED PROTECTION ---
+    // --- GUEST / UNAUTHENTICATED PROTECTION ---
     echo "\n--- 4. Unauthenticated & CSRF Protection ---\n";
     $guestRes = http_req("{$baseUrl}/cancel-project-handler.php", 'POST', ['project_id' => $projAId, 'reason' => 'test']);
     assert_test('Security: Guest cannot cancel project', $guestRes['code'] === 401 || strpos($guestRes['headers'], 'login.php') !== false || strpos($guestRes['body'], 'Unauthorized') !== false);
@@ -187,7 +186,7 @@ try {
     $badCsrfJson = json_decode($badCsrfRes['body'], true);
     assert_test('Security: Invalid CSRF rejected', ($badCsrfJson['success'] ?? true) === false, $badCsrfRes['body']);
 
-    // --- 5. ANTI-IDOR CHECK ---
+    // --- ANTI-IDOR CHECK ---
     echo "\n--- 5. Anti-IDOR Authorization Tests ---\n";
     // Client 2 attempts to cancel Project A (owned by Client 1)
     $idorRes = http_req("{$baseUrl}/cancel-project-handler.php", 'POST', ['project_id' => $projAId, 'reason' => 'Malicious cancellation', 'csrf_token' => $client2Csrf], $client2Cookie, ['Accept: application/json']);
@@ -198,7 +197,7 @@ try {
     $checkA = $pdo->query("SELECT status_type FROM projects WHERE id = {$projAId}")->fetch();
     assert_test('Anti-IDOR: Project A status remains untouched', $checkA['status_type'] === 'in_design');
 
-    // --- 6. CLIENT CANCELLING THEIR OWN PROJECT ---
+    // --- CLIENT CANCELLING THEIR OWN PROJECT ---
     echo "\n--- 6. Client Cancels Own Project ---\n";
     $cancelReasonA = "Client decided to pivot internal strategy and pause external design.";
     $clientCancelRes = http_req("{$baseUrl}/cancel-project-handler.php", 'POST', ['project_id' => $projAId, 'reason' => $cancelReasonA, 'csrf_token' => $client1Csrf], $client1Cookie, ['Accept: application/json']);
@@ -213,7 +212,7 @@ try {
     assert_test('DB Verify: Project A cancelled_by equals Client 1 ID', (int)$rowA['cancelled_by'] === (int)$client1['id']);
     assert_test('DB Verify: Project A cancellation_reason saved correctly', $rowA['cancellation_reason'] === $cancelReasonA);
 
-    // --- 7. STATE GUARD CHECKS ---
+    // --- STATE GUARD CHECKS ---
     echo "\n--- 7. State Guard Tests ---\n";
     // Attempt to cancel an already cancelled project
     $alreadyRes = http_req("{$baseUrl}/cancel-project-handler.php", 'POST', ['project_id' => $projAId, 'reason' => 'repeat', 'csrf_token' => $client1Csrf], $client1Cookie, ['Accept: application/json']);
@@ -225,7 +224,7 @@ try {
     $compJson = json_decode($compRes['body'], true);
     assert_test('State Guard: Cannot cancel a completed project', ($compJson['success'] ?? true) === false && strpos($compJson['error'] ?? '', 'Completed') !== false, $compRes['body']);
 
-    // --- 8. ADMIN CANCELLING A PROJECT ---
+    // --- ADMIN CANCELLING A PROJECT ---
     echo "\n--- 8. Admin Cancels Project C ---\n";
     $cancelReasonC = "Project cancelled by Admin due to resource re-allocation.";
     $adminCancelRes = http_req("{$baseUrl}/cancel-project-handler.php", 'POST', ['project_id' => $projCId, 'reason' => $cancelReasonC, 'csrf_token' => $adminCsrf], $adminCookie, ['Accept: application/json']);
@@ -238,7 +237,7 @@ try {
     assert_test('DB Verify: Project C cancelled_by equals Admin ID', (int)$rowC['cancelled_by'] === (int)$adminUser['id']);
     assert_test('DB Verify: Project C cancellation_reason matches', $rowC['cancellation_reason'] === $cancelReasonC);
 
-    // --- 9. MUTATION LOCKS ON CANCELLED PROJECTS ---
+    // --- MUTATION LOCKS ON CANCELLED PROJECTS ---
     echo "\n--- 9. Server-Side Mutation Lock Tests ---\n";
     // Client attempts to send message on cancelled Project A
     $clientMsgRes = http_req("{$baseUrl}/client/project-detail.php?id={$projAId}", 'POST', ['message' => 'Post-cancellation message', 'csrf_token' => $client1Csrf], $client1Cookie);
@@ -260,7 +259,7 @@ try {
     $payJson = json_decode($payRes['body'], true);
     assert_test('Mutation Lock: Payment handler rejects cancelled project', ($payJson['success'] ?? true) === false && strpos($payJson['error'] ?? '', 'cancelled') !== false, $payRes['body']);
 
-    // --- 10. UI & DETAIL PAGE RENDERING ---
+    // --- UI & DETAIL PAGE RENDERING ---
     echo "\n--- 10. Read-Only Detail View UI Rendering ---\n";
     // Client Detail View for Project A
     $clientDetailRes = http_req("{$baseUrl}/client/project-detail.php?id={$projAId}", 'GET', null, $client1Cookie);
@@ -280,7 +279,7 @@ try {
     assert_test('Admin UI: File uploads locked note shown', strpos($adminDetailRes['body'], 'File uploads are locked because this project has been cancelled') !== false);
     assert_test('Admin UI: Message input locked note shown', strpos($adminDetailRes['body'], 'Messaging is closed for this project because it has been cancelled') !== false);
 
-    // --- 11. DASHBOARD RENDERING ---
+    // --- DSHBOARD RENDERING ---
     echo "\n--- 11. Dashboard Displays & Calculations ---\n";
     // Client Dashboard
     $clientDashRes = http_req("{$baseUrl}/client/dashboard.php", 'GET', null, $client1Cookie);
@@ -294,7 +293,7 @@ try {
     assert_test('Admin Dash: Project A link still works', strpos($adminDashRes['body'], "admin/project-detail.php?id={$projAId}") !== false);
 
 } finally {
-    // --- 12. CLEANUP ---
+    // ---  CLEANUP ---
     echo "\n--- 12. Cleanup Test Records ---\n";
     $pdo->prepare("DELETE FROM project_messages WHERE project_id IN (?, ?, ?)")->execute([$projAId, $projBId, $projCId]);
     $pdo->prepare("DELETE FROM projects WHERE id IN (?, ?, ?)")->execute([$projAId, $projBId, $projCId]);

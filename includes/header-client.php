@@ -1,7 +1,7 @@
 <?php
 /**
  * Top header bar for Client Portal.
- * Full-width horizontal dark navy navigation layout (matches Reference Image 3).
+ * Full-width horizontal dark navy navigation layout).
  */
 
 $base = str_contains($_SERVER['SCRIPT_NAME'], '/client/') ? '../' : '';

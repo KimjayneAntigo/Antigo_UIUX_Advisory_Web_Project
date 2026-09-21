@@ -1,6 +1,5 @@
 <?php
 /**
- * scratch/apply_cancellation_migration.php
  * Applies cancellation columns and constraints to the projects table.
  */
 
