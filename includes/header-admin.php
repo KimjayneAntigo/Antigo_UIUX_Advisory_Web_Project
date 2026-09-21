@@ -73,16 +73,15 @@ $navItems = [
                     if ($key === 'payments')  $badgeCount = $pendingPaymentsCount;
                 ?>
                 <a href="<?= htmlspecialchars($href, ENT_QUOTES, 'UTF-8') ?>"
-                   class="relative h-full flex items-center text-xs font-semibold tracking-wide transition-colors <?= $isActive ? 'text-white font-bold' : 'text-white/70 hover:text-white' ?>">
+                   data-nav="<?= $key ?>"
+                   class="nav-link-top group relative h-full flex items-center text-xs font-semibold tracking-wide transition-colors <?= $isActive ? 'active text-white font-bold' : 'text-white/70 hover:text-white' ?>">
                     <span><?= $label ?></span>
                     <?php if ($badgeCount > 0): ?>
                         <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-400 text-amber-950 leading-none">
                             <?= $badgeCount ?>
                         </span>
                     <?php endif; ?>
-                    <?php if ($isActive): ?>
-                        <span class="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#4C6CCB] rounded-t-sm"></span>
-                    <?php endif; ?>
+                    <span class="nav-indicator absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#4C6CCB] rounded-t-sm transition-all duration-200 pointer-events-none <?= $isActive ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-0 group-hover:opacity-100 group-hover:scale-x-100' ?>"></span>
                 </a>
             <?php endforeach; ?>
         </nav>
@@ -150,3 +149,51 @@ $navItems = [
         </a>
     </div>
 </header>
+
+<script>
+(function() {
+    function syncAdminHashNav() {
+        const hash = window.location.hash;
+        if (!hash) return;
+        const navLinks = document.querySelectorAll('header nav a[data-nav]');
+        let matched = false;
+        navLinks.forEach(link => {
+            const href = link.getAttribute('href') || '';
+            const linkHash = href.includes('#') ? '#' + href.split('#')[1] : '';
+            const ind = link.querySelector('.nav-indicator');
+            if (linkHash && linkHash === hash) {
+                matched = true;
+                link.classList.add('active', 'text-white', 'font-bold');
+                link.classList.remove('text-white/70');
+                if (ind) {
+                    ind.classList.add('opacity-100', 'scale-x-100');
+                    ind.classList.remove('opacity-0', 'scale-x-0');
+                }
+            } else if (linkHash) {
+                link.classList.remove('active', 'font-bold');
+                link.classList.add('text-white/70');
+                if (ind) {
+                    ind.classList.remove('opacity-100', 'scale-x-100');
+                    ind.classList.add('opacity-0', 'scale-x-0');
+                }
+            }
+        });
+        if (matched) {
+            // Unset overview link active state if another hash link matched
+            const overviewLink = document.querySelector('header nav a[data-nav="overview"]');
+            if (overviewLink) {
+                overviewLink.classList.remove('active', 'font-bold');
+                overviewLink.classList.add('text-white/70');
+                const ind = overviewLink.querySelector('.nav-indicator');
+                if (ind) {
+                    ind.classList.remove('opacity-100', 'scale-x-100');
+                    ind.classList.add('opacity-0', 'scale-x-0');
+                }
+            }
+        }
+    }
+    window.addEventListener('hashchange', syncAdminHashNav);
+    window.addEventListener('DOMContentLoaded', syncAdminHashNav);
+    if (document.readyState !== 'loading') syncAdminHashNav();
+})();
+</script>

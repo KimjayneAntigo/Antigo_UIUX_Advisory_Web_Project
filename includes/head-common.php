@@ -136,16 +136,16 @@ $pageTitle = $pageTitle ?? 'Antigo UI/UX Advisory';
     width: 100%;
   }
 
-  /* Horizontal Top Nav Links */
+  /* Horizontal Top Nav Links & Hover Panel Indicator */
   .nav-link-top {
     position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.875rem;
-    font-weight: 500;
+    height: 100%;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.025em;
     color: rgba(255, 255, 255, 0.7);
-    padding: 0.5rem 0.75rem;
     text-decoration: none;
     transition: color 0.2s ease;
   }
@@ -156,15 +156,24 @@ $pageTitle = $pageTitle ?? 'Antigo UI/UX Advisory';
     color: #FFFFFF;
     font-weight: 700;
   }
-  .nav-link-top.active::after {
-    content: '';
+  .nav-link-top .nav-indicator {
     position: absolute;
-    bottom: -10px;
-    left: 0.75rem;
-    right: 0.75rem;
-    height: 2px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2.5px;
     background-color: #4C6CCB;
-    border-radius: 2px;
+    border-radius: 2px 2px 0 0;
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .nav-link-top:hover .nav-indicator,
+  .nav-link-top.active .nav-indicator {
+    transform: scaleX(1);
+    opacity: 1;
   }
 
   /* Responsive adjustments */

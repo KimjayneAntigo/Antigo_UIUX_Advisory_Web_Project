@@ -52,11 +52,10 @@ $navItems = [
             <?php foreach ($navItems as [$label, $href, $key]): ?>
                 <?php $isActive = ($currentActive === $key); ?>
                 <a href="<?= htmlspecialchars($href, ENT_QUOTES, 'UTF-8') ?>"
-                   class="relative h-full flex items-center text-xs tracking-wide transition-colors <?= $isActive ? 'text-white font-bold' : 'text-white/70 hover:text-white font-medium' ?>">
+                   data-nav="<?= $key ?>"
+                   class="nav-link-top group relative h-full flex items-center text-xs tracking-wide transition-colors <?= $isActive ? 'active text-white font-bold' : 'text-white/70 hover:text-white font-medium' ?>">
                     <span><?= $label ?></span>
-                    <?php if ($isActive): ?>
-                        <span class="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#4C6CCB] rounded-t-sm"></span>
-                    <?php endif; ?>
+                    <span class="nav-indicator absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#4C6CCB] rounded-t-sm transition-all duration-200 pointer-events-none <?= $isActive ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-0 group-hover:opacity-100 group-hover:scale-x-100' ?>"></span>
                 </a>
             <?php endforeach; ?>
         </nav>
@@ -174,4 +173,49 @@ document.addEventListener('click', function(e) {
         dd.classList.add('hidden');
     }
 });
+
+(function() {
+    function syncClientHashNav() {
+        const hash = window.location.hash;
+        if (!hash) return;
+        const navLinks = document.querySelectorAll('header nav a[data-nav]');
+        let matched = false;
+        navLinks.forEach(link => {
+            const href = link.getAttribute('href') || '';
+            const linkHash = href.includes('#') ? '#' + href.split('#')[1] : '';
+            const ind = link.querySelector('.nav-indicator');
+            if (linkHash && linkHash === hash) {
+                matched = true;
+                link.classList.add('active', 'text-white', 'font-bold');
+                link.classList.remove('text-white/70');
+                if (ind) {
+                    ind.classList.add('opacity-100', 'scale-x-100');
+                    ind.classList.remove('opacity-0', 'scale-x-0');
+                }
+            } else if (linkHash) {
+                link.classList.remove('active', 'font-bold');
+                link.classList.add('text-white/70');
+                if (ind) {
+                    ind.classList.remove('opacity-100', 'scale-x-100');
+                    ind.classList.add('opacity-0', 'scale-x-0');
+                }
+            }
+        });
+        if (matched) {
+            const dashLink = document.querySelector('header nav a[data-nav="dashboard"]');
+            if (dashLink) {
+                dashLink.classList.remove('active', 'font-bold');
+                dashLink.classList.add('text-white/70');
+                const ind = dashLink.querySelector('.nav-indicator');
+                if (ind) {
+                    ind.classList.remove('opacity-100', 'scale-x-100');
+                    ind.classList.add('opacity-0', 'scale-x-0');
+                }
+            }
+        }
+    }
+    window.addEventListener('hashchange', syncClientHashNav);
+    window.addEventListener('DOMContentLoaded', syncClientHashNav);
+    if (document.readyState !== 'loading') syncClientHashNav();
+})();
 </script>
