@@ -428,3 +428,22 @@ function count_pending_payments(PDO $pdo): int
         return 0;
     }
 }
+
+/**
+ * Format any currency value or string as USD ($).
+ */
+function format_usd(mixed $val): string
+{
+    if ($val === null || $val === '') {
+        return '$0';
+    }
+    if (is_string($val)) {
+        $val = trim($val);
+        if (str_starts_with($val, '$')) {
+            return $val;
+        }
+        $val = str_replace('₱', '', $val);
+    }
+    $num = is_numeric($val) ? (float)$val : parse_budget_amount((string)$val);
+    return '$' . number_format($num);
+}

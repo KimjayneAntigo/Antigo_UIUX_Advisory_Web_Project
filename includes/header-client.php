@@ -17,9 +17,11 @@ $clientInitial   = strtoupper(substr($nameParts[0] ?? 'C', 0, 1));
 $currentActive = $activePage ?? '';
 if (empty($currentActive)) {
     $script = $_SERVER['SCRIPT_NAME'] ?? '';
-    if (str_contains($script, 'book-consultation.php')) {
+    if (str_contains($script, 'scheduling.php') || str_contains($script, 'book-consultation.php')) {
         $currentActive = 'scheduling';
-    } elseif (str_contains($script, 'project-detail.php')) {
+    } elseif (str_contains($script, 'files.php')) {
+        $currentActive = 'files';
+    } elseif (str_contains($script, 'projects.php') || str_contains($script, 'project-detail.php') || str_contains($script, 'client-project.php')) {
         $currentActive = 'projects';
     } else {
         $currentActive = 'dashboard';
@@ -27,10 +29,10 @@ if (empty($currentActive)) {
 }
 
 $navItems = [
-    ['Dashboard',  $base . 'client/dashboard.php',          'dashboard'],
-    ['Projects',   $base . 'client/dashboard.php#projects', 'projects'],
-    ['Scheduling', $base . 'book-consultation.php',         'scheduling'],
-    ['Files',      $base . 'client/dashboard.php#files',    'files'],
+    ['Dashboard',  $base . 'client/dashboard.php',  'dashboard'],
+    ['Projects',   $base . 'client/projects.php',   'projects'],
+    ['Files',      $base . 'client/files.php',      'files'],
+    ['Scheduling', $base . 'client/scheduling.php', 'scheduling'],
 ];
 ?>
 <header class="w-full bg-[#13224B] text-white sticky top-0 z-50 shadow-md border-b border-white/10">
@@ -95,24 +97,25 @@ $navItems = [
                             <span>Account Settings &amp; Profile</span>
                         </a>
 
-                        <a href="<?= $base ?>client/dashboard.php#projects"
+                        <a href="<?= $base ?>client/projects.php"
                            onclick="document.getElementById('client-user-dropdown').classList.add('hidden')"
                            class="flex items-center gap-2.5 px-4 py-2 hover:bg-white/10 text-white/90 hover:text-white transition-colors">
                             <iconify-icon icon="lucide:folder-kanban" class="text-sm text-[#6C5BB5]"></iconify-icon>
                             <span>My Projects</span>
                         </a>
 
-                        <a href="<?= $base ?>book-consultation.php"
-                           class="flex items-center gap-2.5 px-4 py-2 hover:bg-white/10 text-white/90 hover:text-white transition-colors">
-                            <iconify-icon icon="lucide:calendar" class="text-sm text-emerald-400"></iconify-icon>
-                            <span>Schedule Consultation</span>
-                        </a>
-
-                        <a href="<?= $base ?>client/dashboard.php#files"
+                        <a href="<?= $base ?>client/files.php"
                            onclick="document.getElementById('client-user-dropdown').classList.add('hidden')"
                            class="flex items-center gap-2.5 px-4 py-2 hover:bg-white/10 text-white/90 hover:text-white transition-colors">
                             <iconify-icon icon="lucide:file-text" class="text-sm text-amber-400"></iconify-icon>
                             <span>Deliverables &amp; Files</span>
+                        </a>
+
+                        <a href="<?= $base ?>client/scheduling.php"
+                           onclick="document.getElementById('client-user-dropdown').classList.add('hidden')"
+                           class="flex items-center gap-2.5 px-4 py-2 hover:bg-white/10 text-white/90 hover:text-white transition-colors">
+                            <iconify-icon icon="lucide:calendar" class="text-sm text-emerald-400"></iconify-icon>
+                            <span>Schedule Consultation</span>
                         </a>
                     </div>
 

@@ -1,6 +1,7 @@
 <?php
 /**
- * Scoped strictly to the logged-in client's user_id to prevent IDOR access.
+ * Client Portal Dashboard & Executive Overview.
+ * High-level project spotlight, deliverable downloads, upcoming consultations, and account settings.
  */
 
 require_once __DIR__ . '/../includes/auth-check-client.php';
@@ -9,7 +10,7 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/routing.php';
 
 $activePage     = 'dashboard';
-$pageTitle      = 'Client Dashboard — Workspace';
+$pageTitle      = 'Client Dashboard — Workspace | Antigo Advisory';
 $pageHeading    = 'Client Workspace';
 $pageSubheading = 'Track your active projects, deliverables, milestones, and studio messages.';
 
@@ -19,9 +20,10 @@ if ($userId <= 0) {
 }
 
 // Client name
-$rawName   = $_SESSION['user_name'] ?? $_SESSION['name'] ?? 'Client';
-$nameParts = explode(' ', trim($rawName));
-$firstName = htmlspecialchars($nameParts[0], ENT_QUOTES, 'UTF-8');
+$rawName     = $_SESSION['user_name'] ?? $_SESSION['name'] ?? 'Client';
+$nameParts   = explode(' ', trim($rawName));
+$firstName   = htmlspecialchars($nameParts[0], ENT_QUOTES, 'UTF-8');
+$clientEmail = trim($_SESSION['email'] ?? '');
 
 // POST Handlers: Settings (Profile & Password updates)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -92,16 +94,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $activeProjectsCount = 0;
 $totalFilesCount     = 0;
 $messagesCount       = 0;
-$projects            = [];
+$upcomingBookings    = 0;
+$activeProject       = null;
 $invoicedProjects    = [];
-$pendingInquiries    = [];
-$clientFiles         = [];
-$clientMessages      = [];
-$recentActivities    = [];
-$currentUserProfile  = ['name' => $rawName, 'email' => $_SESSION['email'] ?? '', 'company' => ''];
+$recentFiles         = [];
+$nextBooking         = null;
+$currentUserProfile  = ['name' => $rawName, 'email' => $clientEmail, 'company' => ''];
 
 try {
-    // Current User Details for Settings
+    // Current User Profile for Settings
     $stmtUser = $pdo->prepare('SELECT name, email, company, created_at FROM users WHERE id = ? LIMIT 1');
     $stmtUser->execute([$userId]);
     $uData = $stmtUser->fetch();
@@ -109,75 +110,32 @@ try {
         $currentUserProfile = $uData;
     }
 
-    // Active Projects Count (Excludes completed and cancelled)
+    // Active Projects Count
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM projects WHERE user_id = :uid AND status_type NOT IN ('completed', 'cancelled')");
     $stmt->execute(['uid' => $userId]);
     $activeProjectsCount = (int) $stmt->fetchColumn();
 
-    // Total Files Shared Count
-    $stmt = $pdo->prepare(
-        'SELECT COUNT(*)
-         FROM project_files pf
-         JOIN projects p ON pf.project_id = p.id
-         WHERE p.user_id = :uid'
-    );
+    // Total Files Count
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM project_files pf JOIN projects p ON pf.project_id = p.id WHERE p.user_id = :uid');
     $stmt->execute(['uid' => $userId]);
     $totalFilesCount = (int) $stmt->fetchColumn();
 
     // Designer Messages Count
-    $stmt = $pdo->prepare(
-        "SELECT COUNT(*)
-         FROM project_messages pm
-         JOIN projects p ON pm.project_id = p.id
-         WHERE p.user_id = :uid AND pm.role = 'designer'"
-    );
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM project_messages pm JOIN projects p ON pm.project_id = p.id WHERE p.user_id = :uid AND pm.role = 'designer'");
     $stmt->execute(['uid' => $userId]);
     $messagesCount = (int) $stmt->fetchColumn();
 
-    // Client Projects (Separated into Active vs Cancelled)
-    $stmt = $pdo->prepare(
-        'SELECT * FROM projects
-         WHERE user_id = :uid
-         ORDER BY updated_at DESC'
-    );
-    $stmt->execute(['uid' => $userId]);
-    $allClientProjects = $stmt->fetchAll();
-    $projects = array_values(array_filter($allClientProjects, fn($p) => ($p['status_type'] ?? '') !== 'cancelled'));
-    $cancelledProjects = array_values(array_filter($allClientProjects, fn($p) => ($p['status_type'] ?? '') === 'cancelled'));
+    // Scheduled Consultations Count
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM bookings WHERE (user_id = ? OR client_email = ? OR guest_email = ?) AND status != 'cancelled'");
+    $stmt->execute([$userId, $clientEmail, $clientEmail]);
+    $upcomingBookings = (int) $stmt->fetchColumn();
 
-    // Pending Review Inquiries (Live intake list for this client)
-    $stmtInq = $pdo->prepare(
-        "SELECT * FROM inquiries
-         WHERE user_id = :uid AND status != 'converted'
-         ORDER BY created_at DESC"
-    );
-    $stmtInq->execute(['uid' => $userId]);
-    $pendingInquiries = $stmtInq->fetchAll();
+    // Featured Active Project (Top active sprint)
+    $stmtAct = $pdo->prepare("SELECT * FROM projects WHERE user_id = :uid AND status_type NOT IN ('completed', 'cancelled') ORDER BY updated_at DESC LIMIT 1");
+    $stmtAct->execute(['uid' => $userId]);
+    $activeProject = $stmtAct->fetch();
 
-    // All Client Deliverable Files (Download-only, scoped strictly to $userId)
-    $stmtFiles = $pdo->prepare(
-        'SELECT pf.*, p.title AS project_title, p.project_code
-         FROM project_files pf
-         JOIN projects p ON pf.project_id = p.id
-         WHERE p.user_id = :uid
-         ORDER BY pf.uploaded_at DESC'
-    );
-    $stmtFiles->execute(['uid' => $userId]);
-    $clientFiles = $stmtFiles->fetchAll();
-
-    // All Client Messages (Scoped strictly to $userId)
-    $stmtMsgs = $pdo->prepare(
-        'SELECT pm.*, p.title AS project_title, p.project_code
-         FROM project_messages pm
-         JOIN projects p ON pm.project_id = p.id
-         WHERE p.user_id = :uid
-         ORDER BY pm.created_at DESC
-         LIMIT 15'
-    );
-    $stmtMsgs->execute(['uid' => $userId]);
-    $clientMessages = $stmtMsgs->fetchAll();
-
-    // Invoiced Projects Awaiting Payment (invoice_sent_at IS NOT NULL and no verified payment)
+    // Invoiced Projects Awaiting Payment
     $stmtInvoiced = $pdo->prepare(
         "SELECT p.id, p.title, p.project_code, p.invoice_sent_at
          FROM projects p
@@ -191,34 +149,28 @@ try {
     $stmtInvoiced->execute(['uid' => $userId]);
     $invoicedProjects = $stmtInvoiced->fetchAll();
 
-    // Recent Activity Feed (Merged Files + Messages)
-    $fileActs = array_map(function ($f) {
-        return [
-            'act_type'      => 'file',
-            'act_text'      => $f['name'],
-            'act_time'      => $f['uploaded_at'],
-            'project_id'    => $f['project_id'],
-            'project_title' => $f['project_title'],
-            'act_sub'       => 'New deliverable uploaded',
-        ];
-    }, array_slice($clientFiles, 0, 6));
+    // Latest 4 Deliverables
+    $stmtFiles = $pdo->prepare(
+        'SELECT pf.*, p.title AS project_title, p.project_code
+         FROM project_files pf
+         JOIN projects p ON pf.project_id = p.id
+         WHERE p.user_id = :uid
+         ORDER BY pf.uploaded_at DESC
+         LIMIT 4'
+    );
+    $stmtFiles->execute(['uid' => $userId]);
+    $recentFiles = $stmtFiles->fetchAll();
 
-    $msgActs = array_map(function ($m) {
-        return [
-            'act_type'      => 'message',
-            'act_text'      => $m['message'],
-            'act_time'      => $m['created_at'],
-            'project_id'    => $m['project_id'],
-            'project_title' => $m['project_title'],
-            'act_sub'       => 'Message from ' . $m['sender'],
-        ];
-    }, array_slice($clientMessages, 0, 6));
-
-    $recentActivities = array_merge($fileActs, $msgActs);
-    usort($recentActivities, function ($a, $b) {
-        return strtotime($b['act_time']) <=> strtotime($a['act_time']);
-    });
-    $recentActivities = array_slice($recentActivities, 0, 6);
+    // Next Scheduled Consultation
+    $stmtBkg = $pdo->prepare(
+        "SELECT * FROM bookings 
+         WHERE (user_id = ? OR client_email = ? OR guest_email = ?) 
+           AND status IN ('pending', 'confirmed') 
+         ORDER BY date ASC, time ASC 
+         LIMIT 1"
+    );
+    $stmtBkg->execute([$userId, $clientEmail, $clientEmail]);
+    $nextBooking = $stmtBkg->fetch();
 
 } catch (\PDOException $e) {
     error_log('client/dashboard.php error: ' . $e->getMessage());
@@ -230,10 +182,6 @@ try {
 <head>
     <?php require_once __DIR__ . '/../includes/head-common.php'; ?>
     <style>
-        .project-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 28px -6px rgba(19,34,75,0.09);
-        }
         .progress-track {
             background: rgba(19,34,75,0.07);
             border-radius: 99px;
@@ -246,9 +194,17 @@ try {
             border-radius: 99px;
             transition: width 0.5s ease;
         }
+        .dashboard-card {
+            background: #FFFFFF;
+            border: 1px solid rgba(19, 34, 75, 0.08);
+            border-radius: 20px;
+            box-shadow: 0 4px 18px -4px rgba(19, 34, 75, 0.05);
+        }
     </style>
 </head>
 <body class="min-h-screen bg-[#F4F6F8]">
+
+  <!-- Top Horizontal Navbar -->
   <?php $activePage = 'dashboard'; require_once __DIR__ . '/../includes/header-client.php'; ?>
 
   <main class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
@@ -256,7 +212,7 @@ try {
       <!-- Flash Notification -->
       <?= render_flash() ?>
 
-      <!-- Invoiced Projects Notification Banners -->
+      <!-- Invoiced Projects Alert Banners -->
       <?php if (!empty($invoicedProjects)): ?>
         <div class="space-y-3">
           <?php foreach ($invoicedProjects as $invProj): ?>
@@ -285,17 +241,17 @@ try {
         </div>
       <?php endif; ?>
 
-      <!-- Welcome Banner -->
-      <div class="card p-6 sm:p-8 bg-gradient-to-r from-[#13224B] via-[#21356f] to-[#6C5BB5] text-white border-0 shadow-lg relative overflow-hidden">
+      <!-- Welcome Hero Banner -->
+      <div class="card p-6 sm:p-8 bg-gradient-to-r from-[#13224B] via-[#21356f] to-[#6C5BB5] text-white border-0 shadow-lg relative overflow-hidden rounded-3xl">
         <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div class="space-y-2">
             <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-white/15 text-[#DDEBFF]">
               <iconify-icon icon="lucide:sparkles" class="text-amber-300"></iconify-icon>
               Client Advisory Portal
             </span>
-            <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+            <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
               Welcome back, <?= $firstName ?>!
-            </h2>
+            </h1>
             <p class="text-xs sm:text-sm text-[#DDEBFF] max-w-xl leading-relaxed">
               Track live design deliverables, milestone progress, and consult directly with your assigned Antigo advisory team.
             </p>
@@ -316,384 +272,284 @@ try {
         </div>
       </div>
 
-      <!-- ── Three Stat Cards (Scoped to $userId) ────────────────────────── -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+      <!-- Quick KPI Stat Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <!-- Active Projects -->
-        <div class="card p-6 border border-[rgba(19,34,75,0.08)]">
+        <a href="projects.php" class="dashboard-card p-6 block hover:border-[#4C6CCB] transition-all group">
           <div class="flex items-center justify-between mb-3">
             <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Active Projects</span>
-            <div class="w-10 h-10 rounded-xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-lg shadow-sm">
+            <div class="w-10 h-10 rounded-xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-lg shadow-sm group-hover:scale-105 transition-transform">
               <iconify-icon icon="lucide:folder-kanban"></iconify-icon>
             </div>
           </div>
           <div class="text-3xl font-extrabold text-[#13224B]"><?= $activeProjectsCount ?></div>
-          <p class="text-xs text-[#6C5BB5] font-semibold mt-1">Ongoing studio sprints</p>
-        </div>
+          <p class="text-xs text-[#6C5BB5] font-semibold mt-1">Ongoing studio sprints &rarr;</p>
+        </a>
 
-        <!-- Total Files Shared -->
-        <div class="card p-6 border border-[rgba(19,34,75,0.08)]">
+        <!-- Deliverables Shared -->
+        <a href="files.php" class="dashboard-card p-6 block hover:border-[#4C6CCB] transition-all group">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Files Shared</span>
-            <div class="w-10 h-10 rounded-xl bg-purple-50 text-[#6C5BB5] flex items-center justify-center text-lg shadow-sm">
-              <iconify-icon icon="lucide:file-archive"></iconify-icon>
+            <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Deliverables &amp; Files</span>
+            <div class="w-10 h-10 rounded-xl bg-purple-50 text-[#6C5BB5] flex items-center justify-center text-lg shadow-sm group-hover:scale-105 transition-transform">
+              <iconify-icon icon="lucide:file-text"></iconify-icon>
             </div>
           </div>
           <div class="text-3xl font-extrabold text-[#13224B]"><?= $totalFilesCount ?></div>
-          <p class="text-xs text-[#8890AA] mt-1">Deliverables &amp; Figma assets</p>
-        </div>
+          <p class="text-xs text-[#8890AA] mt-1">Figma &amp; specs archive &rarr;</p>
+        </a>
 
-        <!-- Designer Messages -->
-        <div class="card p-6 border border-[rgba(19,34,75,0.08)]">
+        <!-- Consultations Scheduled -->
+        <a href="scheduling.php" class="dashboard-card p-6 block hover:border-[#4C6CCB] transition-all group">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Messages from Studio</span>
-            <div class="w-10 h-10 rounded-xl bg-[#FFF1D6] text-[#946200] flex items-center justify-center text-lg shadow-sm">
+            <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Consultations</span>
+            <div class="w-10 h-10 rounded-xl bg-[#FFF1D6] text-[#946200] flex items-center justify-center text-lg shadow-sm group-hover:scale-105 transition-transform">
+              <iconify-icon icon="lucide:calendar-clock"></iconify-icon>
+            </div>
+          </div>
+          <div class="text-3xl font-extrabold text-[#13224B]"><?= $upcomingBookings ?></div>
+          <p class="text-xs text-[#946200] font-semibold mt-1">Scheduled sessions &rarr;</p>
+        </a>
+
+        <!-- Messages from Studio -->
+        <div class="dashboard-card p-6">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Studio Updates</span>
+            <div class="w-10 h-10 rounded-xl bg-[#DFF6E8] text-[#127A45] flex items-center justify-center text-lg shadow-sm">
               <iconify-icon icon="lucide:message-circle"></iconify-icon>
             </div>
           </div>
           <div class="text-3xl font-extrabold text-[#13224B]"><?= $messagesCount ?></div>
-          <p class="text-xs text-[#127A45] font-semibold mt-1">Direct designer updates</p>
+          <p class="text-xs text-[#127A45] font-semibold mt-1">Direct designer feedback</p>
         </div>
       </div>
 
-      <!-- Main Grid: Projects List + Recent Activity -->
+      <!-- Main Overview Grid: Project Spotlight + Sidebar Feeds -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
-        <!-- Left: Projects and Pending Inquiries (2 Cols) -->
-        <div class="lg:col-span-2 space-y-6" id="projects">
+        <!-- Left 2 Cols: Active Project Spotlight & Recent Deliverables -->
+        <div class="lg:col-span-2 space-y-8">
           
-          <!-- Section Heading -->
-          <div class="flex items-center justify-between">
-            <div>
-              <h3 class="text-lg font-bold text-[#13224B]">My Projects</h3>
-              <p class="text-xs text-[#8890AA] mt-0.5">Live overview of your design deliverables and timeline milestones.</p>
-            </div>
-            <a href="../inquiry.php" class="text-xs font-bold text-[#4C6CCB] hover:text-[#6C5BB5] flex items-center gap-1">
-              <span>+ New Project</span>
-            </a>
-          </div>
-
-          <!-- Pending Review Inquiries (Live intake created by this client) -->
-          <?php if (!empty($pendingInquiries)): ?>
-            <div class="space-y-3">
-              <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#6C5BB5]">
-                <iconify-icon icon="lucide:clock" class="text-sm"></iconify-icon>
-                <span>Pending Review Inquiries (<?= count($pendingInquiries) ?>)</span>
+          <!-- Active Project Spotlight Card -->
+          <div class="dashboard-card p-6 sm:p-7">
+            <div class="flex items-center justify-between mb-6">
+              <div>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-[#6C5BB5]">Current Spotlight</span>
+                <h2 class="text-lg font-bold text-[#13224B]">Active Project Sprint</h2>
               </div>
-              <?php foreach ($pendingInquiries as $inq): ?>
-                <div class="card p-5 border border-purple-200/80 bg-purple-50/30 rounded-2xl">
-                  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-                    <div class="flex items-center gap-2">
-                      <span class="px-2 py-0.5 rounded bg-[#13224B] font-mono text-[10px] font-bold text-white">
-                        INQ-<?= str_pad((string)$inq['id'], 5, '0', STR_PAD_LEFT) ?>
+              <a href="projects.php" class="text-xs font-bold text-[#4C6CCB] hover:text-[#6C5BB5] flex items-center gap-1">
+                <span>View All Projects &rarr;</span>
+              </a>
+            </div>
+
+            <?php if ($activeProject): ?>
+              <div class="p-6 rounded-2xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.06)]">
+                <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
+                  <div>
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="px-2 py-0.5 rounded bg-white font-mono text-[10px] font-bold text-[#8890AA] border border-[rgba(19,34,75,0.06)]">
+                        <?= htmlspecialchars($activeProject['project_code'], ENT_QUOTES, 'UTF-8') ?>
                       </span>
-                      <h4 class="text-sm font-bold text-[#13224B]">
-                        <?= htmlspecialchars($inq['service'] ?: $inq['project_type'] ?: 'Project Inquiry', ENT_QUOTES, 'UTF-8') ?>
-                      </h4>
+                      <span class="text-xs text-[#6C5BB5] font-semibold">
+                        <?= htmlspecialchars($activeProject['category'] ?? 'UI/UX Design', ENT_QUOTES, 'UTF-8') ?>
+                      </span>
                     </div>
-                    <div>
-                      <?= status_badge($inq['status']) ?>
-                    </div>
+                    <h3 class="text-lg font-bold text-[#13224B]">
+                      <?= htmlspecialchars($activeProject['title'], ENT_QUOTES, 'UTF-8') ?>
+                    </h3>
                   </div>
-                  <p class="text-xs text-[#4b4b4b] line-clamp-2 mb-3 leading-relaxed">
-                    <?= htmlspecialchars($inq['description'], ENT_QUOTES, 'UTF-8') ?>
-                  </p>
-                  <div class="flex flex-wrap items-center justify-between gap-3 text-[11px] text-[#8890AA] pt-2 border-t border-[rgba(19,34,75,0.06)]">
-                    <div class="flex items-center gap-4">
-                      <span>Budget: <strong class="text-[#13224B]"><?= htmlspecialchars($inq['budget'], ENT_QUOTES, 'UTF-8') ?></strong></span>
-                      <span>Timeline: <strong class="text-[#13224B]"><?= htmlspecialchars($inq['timeline'], ENT_QUOTES, 'UTF-8') ?></strong></span>
-                    </div>
-                    <span>Submitted <?= time_ago($inq['created_at']) ?></span>
+                  <div>
+                    <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#DDEBFF] text-[#13224B] uppercase tracking-wider">
+                      <?= htmlspecialchars($activeProject['status'] ?? 'Active', ENT_QUOTES, 'UTF-8') ?>
+                    </span>
                   </div>
                 </div>
-              <?php endforeach; ?>
-            </div>
-          <?php endif; ?>
 
-          <!-- Active Projects List -->
-          <?php if (empty($projects)): ?>
-            <?php if (empty($pendingInquiries)): ?>
-              <div class="card p-12 text-center border border-[rgba(19,34,75,0.08)]">
-                <div class="w-16 h-16 rounded-2xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-3xl mx-auto mb-4">
-                  <iconify-icon icon="lucide:folder-plus"></iconify-icon>
+                <!-- Progress Bar -->
+                <div class="space-y-2 mb-6">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-[#13224B] flex items-center gap-1.5">
+                      <iconify-icon icon="lucide:milestone" class="text-[#6C5BB5]"></iconify-icon>
+                      <?= htmlspecialchars($activeProject['phase_name'] ?? 'In Progress', ENT_QUOTES, 'UTF-8') ?>
+                    </span>
+                    <span class="font-extrabold text-[#4C6CCB] font-mono text-sm"><?= (int)$activeProject['progress'] ?>%</span>
+                  </div>
+                  <div class="progress-track">
+                    <div class="progress-bar-fill" style="width: <?= (int)$activeProject['progress'] ?>%;"></div>
+                  </div>
                 </div>
-                <h4 class="text-base font-bold text-[#13224B]">No Active Projects Yet</h4>
-                <p class="text-xs text-[#8890AA] mt-1.5 max-w-md mx-auto leading-relaxed">
-                  Ready to elevate your digital product with expert UI/UX advisory? Submit your project requirements to start collaborating.
-                </p>
-                <a href="../inquiry.php"
-                   class="inline-flex items-center gap-2 mt-5 px-6 py-3 rounded-full text-xs font-bold text-white shadow-md hover:opacity-90 transition-all"
-                   style="background: linear-gradient(135deg, #4C6CCB, #6C5BB5);">
-                  <iconify-icon icon="lucide:plus"></iconify-icon>
-                  <span>Start a Project</span>
-                </a>
-              </div>
-            <?php endif; ?>
-          <?php else: ?>
-            <div class="space-y-4">
-              <?php foreach ($projects as $p): ?>
-                <a href="project-detail.php?id=<?= (int)$p['id'] ?>"
-                   class="card p-6 block border border-[rgba(19,34,75,0.08)] project-card transition-all group">
-                  <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
-                    <div>
-                      <div class="flex items-center gap-2 mb-1">
-                        <span class="px-2 py-0.5 rounded bg-gray-100 font-mono text-[10px] font-bold text-[#8890AA]">
-                          <?= htmlspecialchars($p['project_code'], ENT_QUOTES, 'UTF-8') ?>
-                        </span>
-                        <span class="text-xs text-[#6C5BB5] font-semibold">
-                          <?= htmlspecialchars($p['category'], ENT_QUOTES, 'UTF-8') ?>
-                        </span>
-                      </div>
-                      <h4 class="text-base font-extrabold text-[#13224B] group-hover:text-[#4C6CCB] transition-colors">
-                        <?= htmlspecialchars($p['title'], ENT_QUOTES, 'UTF-8') ?>
-                      </h4>
-                    </div>
 
-                    <div class="flex-shrink-0">
-                      <?= status_badge($p['status']) ?>
-                    </div>
+                <!-- Meta & Action -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-[rgba(19,34,75,0.06)]">
+                  <div class="text-xs text-[#8890AA]">
+                    Budget: <strong class="text-[#13224B]"><?= format_usd($activeProject['budget'] ?? '$0') ?></strong> &middot; Started <?= time_ago($activeProject['created_at']) ?>
                   </div>
-
-                  <!-- Milestone Progress Bar -->
-                  <div class="space-y-2">
-                    <div class="flex items-center justify-between text-xs">
-                      <span class="font-bold text-[#13224B] flex items-center gap-1.5">
-                        <iconify-icon icon="lucide:milestone" class="text-[#6C5BB5]"></iconify-icon>
-                        <?= htmlspecialchars($p['phase_name'] ?? 'In Progress', ENT_QUOTES, 'UTF-8') ?>
-                      </span>
-                      <span class="font-extrabold text-[#4C6CCB]"><?= (int)$p['progress'] ?>%</span>
-                    </div>
-                    <div class="progress-track">
-                      <div class="progress-bar-fill" style="width: <?= (int)$p['progress'] ?>%;"></div>
-                    </div>
-                  </div>
-
-                  <!-- Footer Meta -->
-                  <div class="flex items-center justify-between text-[11px] text-[#8890AA] pt-4 mt-4 border-t border-[rgba(19,34,75,0.05)]">
-                    <div class="flex items-center gap-1">
-                      <iconify-icon icon="lucide:calendar" class="text-xs"></iconify-icon>
-                      <span>Started <?= time_ago($p['created_at']) ?></span>
-                    </div>
-                    <div class="flex items-center gap-1 text-[#4C6CCB] font-bold group-hover:underline">
-                      <span>View Workspace</span>
-                      <iconify-icon icon="lucide:arrow-right" class="text-xs"></iconify-icon>
-                    </div>
-                  </div>
-                </a>
-              <?php endforeach; ?>
-            </div>
-          <?php endif; ?>
-
-          <!-- Cancelled Projects Section -->
-          <?php if (!empty($cancelledProjects)): ?>
-            <div class="space-y-3 pt-4 border-t border-[rgba(19,34,75,0.08)]">
-              <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-600">
-                <iconify-icon icon="lucide:ban" class="text-sm"></iconify-icon>
-                <span>Cancelled Projects (<?= count($cancelledProjects) ?>)</span>
-              </div>
-              <div class="space-y-3">
-                <?php foreach ($cancelledProjects as $cp): ?>
-                  <a href="project-detail.php?id=<?= (int)$cp['id'] ?>"
-                     class="card p-5 block border border-rose-200/80 bg-rose-50/20 rounded-2xl project-card transition-all group opacity-90 hover:opacity-100">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                      <div class="flex items-center gap-2">
-                        <span class="px-2 py-0.5 rounded bg-gray-200 font-mono text-[10px] font-bold text-gray-700">
-                          <?= htmlspecialchars($cp['project_code'], ENT_QUOTES, 'UTF-8') ?>
-                        </span>
-                        <h4 class="text-sm font-bold text-[#13224B] group-hover:text-rose-600 transition-colors">
-                          <?= htmlspecialchars($cp['title'], ENT_QUOTES, 'UTF-8') ?>
-                        </h4>
-                      </div>
-                      <div>
-                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                          Cancelled
-                        </span>
-                      </div>
-                    </div>
-                    <p class="text-xs text-[#8890AA]">
-                      Cancelled on <?= date('M j, Y', strtotime($cp['cancelled_at'] ?? $cp['updated_at'])) ?> &middot; Click to view read-only history
-                    </p>
+                  <a href="project-detail.php?id=<?= (int)$activeProject['id'] ?>"
+                     class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow transition-all"
+                     style="background: linear-gradient(135deg, #4C6CCB, #6C5BB5);">
+                    <span>Enter Project Workspace</span>
+                    <iconify-icon icon="lucide:arrow-right" class="text-sm"></iconify-icon>
                   </a>
-                <?php endforeach; ?>
-              </div>
-            </div>
-          <?php endif; ?>
-        </div>
-
-        <!-- Recent Activity Feed (Right Column) -->
-        <div class="space-y-5">
-          <div class="flex items-center justify-between">
-            <div>
-              <h3 class="text-lg font-bold text-[#13224B]">Recent Activity</h3>
-              <p class="text-xs text-[#8890AA] mt-0.5">Latest updates across your workspaces.</p>
-            </div>
-          </div>
-
-          <div class="card p-6 border border-[rgba(19,34,75,0.08)]">
-            <?php if (empty($recentActivities)): ?>
-              <div class="py-8 text-center">
-                <iconify-icon icon="lucide:clock" class="text-3xl text-[#8890AA] mb-2 block mx-auto"></iconify-icon>
-                <p class="text-xs text-[#8890AA]">No activity recorded yet.</p>
+                </div>
               </div>
             <?php else: ?>
-              <div class="space-y-4">
-                <?php foreach ($recentActivities as $act): ?>
-                  <div class="flex items-start gap-3 text-xs pb-3.5 border-b border-[rgba(19,34,75,0.05)] last:border-0 last:pb-0">
-                    <div class="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center <?= $act['act_type'] === 'file' ? 'bg-[#DDEBFF] text-[#4C6CCB]' : 'bg-purple-50 text-[#6C5BB5]' ?>">
-                      <iconify-icon icon="<?= $act['act_type'] === 'file' ? 'lucide:file-text' : 'lucide:message-square' ?>"></iconify-icon>
+              <div class="py-10 text-center text-xs text-[#8890AA]">
+                <p>No active project sprint at this moment.</p>
+                <a href="../inquiry.php" class="inline-block mt-3 text-xs font-bold text-[#4C6CCB] hover:underline">
+                  + Submit a new project requirement
+                </a>
+              </div>
+            <?php endif; ?>
+          </div>
+
+          <!-- Recent Deliverables Quick Access -->
+          <div class="dashboard-card p-6 sm:p-7">
+            <div class="flex items-center justify-between mb-5">
+              <div>
+                <h3 class="text-lg font-bold text-[#13224B]">Recent Deliverables</h3>
+                <p class="text-xs text-[#8890AA] mt-0.5">Production assets, specs, and wireframe files uploaded by Kimberly.</p>
+              </div>
+              <a href="files.php" class="text-xs font-bold text-[#4C6CCB] hover:text-[#6C5BB5] flex items-center gap-1">
+                <span>View All Deliverables &rarr;</span>
+              </a>
+            </div>
+
+            <?php if (empty($recentFiles)): ?>
+              <div class="py-8 text-center text-xs text-[#8890AA]">
+                No deliverables shared yet. Once your project enters sprint execution, files will appear here.
+              </div>
+            <?php else: ?>
+              <div class="divide-y divide-[rgba(19,34,75,0.06)]">
+                <?php foreach ($recentFiles as $f): 
+                    $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
+                    $icon = 'lucide:file';
+                    $iconColor = 'text-[#4C6CCB]';
+                    if (in_array($ext, ['fig', 'sketch'], true)) {
+                        $icon = 'lucide:figma';
+                        $iconColor = 'text-purple-600';
+                    } elseif ($ext === 'pdf') {
+                        $icon = 'lucide:file-text';
+                        $iconColor = 'text-rose-500';
+                    } elseif (in_array($ext, ['png', 'jpg', 'jpeg', 'svg'], true)) {
+                        $icon = 'lucide:image';
+                        $iconColor = 'text-emerald-500';
+                    }
+                ?>
+                  <div class="py-3.5 flex items-center justify-between gap-4 first:pt-0 last:pb-0">
+                    <div class="flex items-center gap-3 min-w-0">
+                      <div class="w-8 h-8 rounded-xl bg-[#F4F6F8] flex items-center justify-center text-lg <?= $iconColor ?> shadow-sm flex-shrink-0">
+                        <iconify-icon icon="<?= $icon ?>"></iconify-icon>
+                      </div>
+                      <div class="min-w-0">
+                        <p class="text-xs font-bold text-[#13224B] truncate"><?= htmlspecialchars($f['name'], ENT_QUOTES, 'UTF-8') ?></p>
+                        <p class="text-[10px] text-[#8890AA] truncate mt-0.5">
+                          <?= htmlspecialchars($f['project_code'] . ' · ' . $f['project_title'], ENT_QUOTES, 'UTF-8') ?> &middot; <?= htmlspecialchars($f['size'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                        </p>
+                      </div>
                     </div>
-                    <div class="min-w-0 flex-1">
-                      <p class="text-[10px] text-[#8890AA] font-medium"><?= htmlspecialchars($act['act_sub'], ENT_QUOTES, 'UTF-8') ?></p>
-                      <a href="project-detail.php?id=<?= (int)$act['project_id'] ?>"
-                         class="font-bold text-[#13224B] hover:text-[#4C6CCB] truncate block">
-                        <?= htmlspecialchars($act['act_text'], ENT_QUOTES, 'UTF-8') ?>
-                      </a>
-                      <p class="text-[10px] text-gray-400 mt-0.5"><?= time_ago($act['act_time']) ?></p>
-                    </div>
+
+                    <a href="../download.php?file_id=<?= (int)$f['id'] ?>"
+                       class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#13224B] bg-[#DDEBFF] hover:bg-[#4C6CCB] hover:text-white transition-all shadow-sm flex-shrink-0">
+                      <iconify-icon icon="lucide:download"></iconify-icon>
+                      <span>Download</span>
+                    </a>
                   </div>
                 <?php endforeach; ?>
               </div>
             <?php endif; ?>
           </div>
+
         </div>
 
-      </div>
+        <!-- Right 1 Col: Next Session & Advisory Lead Card -->
+        <div class="space-y-6">
 
-      <!-- ── Messages Section (#messages) ─────────────────────────────────── -->
-      <div class="space-y-5 pt-4" id="messages">
-        <div class="flex items-center justify-between">
-          <div>
-            <h3 class="text-lg font-bold text-[#13224B]">Studio Messages</h3>
-            <p class="text-xs text-[#8890AA] mt-0.5">Real-time collaboration and feedback from your Antigo design team.</p>
-          </div>
-        </div>
-
-        <div class="card p-6 border border-[rgba(19,34,75,0.08)]">
-          <?php if (empty($clientMessages)): ?>
-            <div class="py-10 text-center">
-              <div class="w-12 h-12 rounded-xl bg-purple-50 text-[#6C5BB5] flex items-center justify-center text-2xl mx-auto mb-3">
-                <iconify-icon icon="lucide:message-square"></iconify-icon>
-              </div>
-              <h4 class="text-sm font-bold text-[#13224B]">No messages yet</h4>
-              <p class="text-xs text-[#8890AA] mt-1">Open an active project workspace to send a message to your lead designer.</p>
-            </div>
-          <?php else: ?>
-            <div class="divide-y divide-[rgba(19,34,75,0.06)]">
-              <?php foreach ($clientMessages as $msg): ?>
-                <div class="py-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4 first:pt-0 last:pb-0">
-                  <div class="flex items-start gap-3">
-                    <div class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 <?= $msg['role'] === 'designer' ? 'bg-[#13224B] text-white' : 'bg-[#DDEBFF] text-[#4C6CCB]' ?>">
-                      <?= strtoupper(substr($msg['sender'], 0, 2)) ?>
-                    </div>
-                    <div>
-                      <div class="flex items-center gap-2 mb-1">
-                        <span class="text-xs font-bold text-[#13224B]"><?= htmlspecialchars($msg['sender'], ENT_QUOTES, 'UTF-8') ?></span>
-                        <span class="px-2 py-0.5 rounded text-[10px] font-semibold <?= $msg['role'] === 'designer' ? 'bg-purple-100 text-[#6C5BB5]' : 'bg-blue-50 text-[#4C6CCB]' ?>">
-                          <?= $msg['role'] === 'designer' ? 'Studio Lead' : 'You' ?>
-                        </span>
-                        <span class="text-[11px] text-[#8890AA]"><?= time_ago($msg['created_at']) ?></span>
-                      </div>
-                      <p class="text-xs text-[#4b4b4b] leading-relaxed max-w-2xl">
-                        <?= nl2br(htmlspecialchars($msg['message'], ENT_QUOTES, 'UTF-8')) ?>
-                      </p>
-                      <span class="inline-block mt-1.5 text-[11px] text-[#8890AA] font-mono">
-                        Project: <?= htmlspecialchars($msg['project_code'] . ' — ' . $msg['project_title'], ENT_QUOTES, 'UTF-8') ?>
-                      </span>
-                    </div>
-                  </div>
-                  <a href="project-detail.php?id=<?= (int)$msg['project_id'] ?>#messages"
-                     class="text-xs font-bold text-[#4C6CCB] hover:text-[#6C5BB5] flex items-center gap-1 flex-shrink-0 self-start sm:self-auto">
-                    <span>Reply in Project</span>
-                    <iconify-icon icon="lucide:arrow-right"></iconify-icon>
-                  </a>
+          <!-- Next Session Spotlight -->
+          <div class="dashboard-card p-6">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-[#FFF1D6] text-[#946200] flex items-center justify-center text-sm">
+                  <iconify-icon icon="lucide:calendar"></iconify-icon>
                 </div>
-              <?php endforeach; ?>
-            </div>
-          <?php endif; ?>
-        </div>
-      </div>
-
-      <!-- ── Files Section (#files) ───────────────────────────────────────── -->
-      <div class="space-y-5 pt-4" id="files">
-        <div class="flex items-center justify-between">
-          <div>
-            <h3 class="text-lg font-bold text-[#13224B]">Deliverables &amp; Files</h3>
-            <p class="text-xs text-[#8890AA] mt-0.5">Secure client deliverables, specs, Figma files, and research audits.</p>
-          </div>
-        </div>
-
-        <div class="card border border-[rgba(19,34,75,0.08)] overflow-hidden">
-          <?php if (empty($clientFiles)): ?>
-            <div class="p-10 text-center">
-              <div class="w-12 h-12 rounded-xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-2xl mx-auto mb-3">
-                <iconify-icon icon="lucide:file-text"></iconify-icon>
+                <h3 class="text-sm font-bold text-[#13224B]">Next Session</h3>
               </div>
-              <h4 class="text-sm font-bold text-[#13224B]">No deliverables shared yet</h4>
-              <p class="text-xs text-[#8890AA] mt-1">Design assets and specification documents uploaded by Kimberly will appear here.</p>
+              <a href="scheduling.php" class="text-[11px] font-bold text-[#4C6CCB] hover:underline">
+                Agenda &rarr;
+              </a>
             </div>
-          <?php else: ?>
-            <div class="overflow-x-auto">
-              <table class="w-full text-left text-xs">
-                <thead>
-                  <tr class="border-b border-[rgba(19,34,75,0.08)] text-[#8890AA] uppercase tracking-wider font-bold bg-[#F4F6F8]/50">
-                    <th class="py-3.5 px-6">File Name</th>
-                    <th class="py-3.5 px-4">Associated Project</th>
-                    <th class="py-3.5 px-4">File Size</th>
-                    <th class="py-3.5 px-4">Uploaded</th>
-                    <th class="py-3.5 px-6 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-[rgba(19,34,75,0.06)]">
-                  <?php foreach ($clientFiles as $file): ?>
-                    <tr class="hover:bg-[#F4F6F8]/40 transition-colors">
-                      <td class="py-4 px-6 font-bold text-[#13224B]">
-                        <div class="flex items-center gap-2.5">
-                          <iconify-icon icon="lucide:file" class="text-base text-[#4C6CCB]"></iconify-icon>
-                          <span><?= htmlspecialchars($file['name'], ENT_QUOTES, 'UTF-8') ?></span>
-                        </div>
-                      </td>
-                      <td class="py-4 px-4 text-[#6C5BB5] font-semibold">
-                        <?= htmlspecialchars($file['project_code'] . ' · ' . $file['project_title'], ENT_QUOTES, 'UTF-8') ?>
-                      </td>
-                      <td class="py-4 px-4 text-[#8890AA] font-mono text-[11px]">
-                        <?= htmlspecialchars($file['size'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
-                      </td>
-                      <td class="py-4 px-4 text-[#8890AA]">
-                        <?= time_ago($file['uploaded_at']) ?>
-                      </td>
-                      <td class="py-4 px-6 text-right">
-                        <a href="../download.php?file_id=<?= (int)$file['id'] ?>"
-                           class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-[#4C6CCB] bg-[#DDEBFF] hover:bg-[#4C6CCB] hover:text-white transition-all shadow-sm">
-                          <iconify-icon icon="lucide:download"></iconify-icon>
-                          <span>Download</span>
-                        </a>
-                      </td>
-                    </tr>
-                  <?php endforeach; ?>
-                </tbody>
-              </table>
+
+            <?php if ($nextBooking): ?>
+              <div class="p-4 rounded-xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.06)] space-y-2 text-xs">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-[#13224B]"><?= htmlspecialchars($nextBooking['service'] ?: 'Advisory Consultation') ?></span>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#DDEBFF] text-[#13224B] uppercase">
+                    <?= htmlspecialchars($nextBooking['status']) ?>
+                  </span>
+                </div>
+                <div class="text-[11px] text-[#8890AA] flex items-center gap-1">
+                  <iconify-icon icon="lucide:calendar-clock" class="text-[#6C5BB5]"></iconify-icon>
+                  <span><?= htmlspecialchars($nextBooking['date']) ?> &middot; <?= htmlspecialchars($nextBooking['time']) ?></span>
+                </div>
+                <div class="text-[10px] text-[#4b4b4b]">
+                  Format: <strong><?= htmlspecialchars($nextBooking['format'] ?? 'Google Meet') ?></strong>
+                </div>
+                <div class="pt-2 border-t border-[rgba(19,34,75,0.06)] flex justify-between items-center text-[11px]">
+                  <span class="font-extrabold text-[#13224B]"><?= format_usd($nextBooking['price'] ?? '$150') ?></span>
+                  <a href="scheduling.php" class="font-bold text-[#4C6CCB] hover:underline">View Details &rarr;</a>
+                </div>
+              </div>
+            <?php else: ?>
+              <div class="text-center py-4 text-xs text-[#8890AA]">
+                <p>No upcoming consultation scheduled.</p>
+                <a href="../book-consultation.php" class="inline-block mt-2 text-xs font-bold text-[#4C6CCB] hover:underline">
+                  + Schedule a Consultation
+                </a>
+              </div>
+            <?php endif; ?>
+          </div>
+
+          <!-- Studio Advisory Lead Card -->
+          <div class="dashboard-card p-6 bg-gradient-to-br from-white to-[#F4F6F8]">
+            <div class="flex items-center gap-3.5 mb-4">
+              <img src="../images/profile.png" alt="Kimberly Jayne Antigo" class="w-12 h-12 rounded-full object-cover border-2 border-white shadow-md">
+              <div>
+                <h4 class="text-sm font-bold text-[#13224B]">Kimberly Jayne Antigo</h4>
+                <p class="text-[11px] text-[#6C5BB5] font-semibold">Lead UI/UX Advisor</p>
+              </div>
             </div>
-          <?php endif; ?>
+            <p class="text-xs text-[#4b4b4b] leading-relaxed mb-4">
+              Need strategic guidance or custom sprint adjustments? I am available for direct collaboration.
+            </p>
+            <div class="pt-3 border-t border-[rgba(19,34,75,0.08)] flex items-center justify-between text-xs">
+              <span class="text-[11px] text-[#8890AA]">Response SLA: &lt; 24h</span>
+              <a href="mailto:admin@antigo.com" class="font-bold text-[#4C6CCB] hover:underline flex items-center gap-1">
+                <iconify-icon icon="lucide:mail"></iconify-icon>
+                <span>Contact Studio</span>
+              </a>
+            </div>
+          </div>
+
         </div>
+
       </div>
 
-      <!-- ── Settings Section (#settings) ─────────────────────────────────── -->
-      <div class="space-y-5 pt-4" id="settings">
+      <!-- Account Settings & Profile Section (Anchored via #settings) -->
+      <div class="space-y-6 pt-6 border-t border-[rgba(19,34,75,0.08)]" id="settings">
         <div>
-          <h3 class="text-lg font-bold text-[#13224B]">Account Settings</h3>
-          <p class="text-xs text-[#8890AA] mt-0.5">Manage your client profile details and security credentials.</p>
+          <h2 class="text-lg font-bold text-[#13224B]">Account Settings &amp; Profile</h2>
+          <p class="text-xs text-[#8890AA] mt-0.5">Manage your client profile details, company credentials, and security password.</p>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
           
           <!-- Profile Information Form -->
-          <div class="card p-6 sm:p-8 border border-[rgba(19,34,75,0.08)]">
+          <div class="dashboard-card p-6 sm:p-8">
             <div class="flex items-center gap-3 mb-6">
-              <div class="w-10 h-10 rounded-xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-lg">
+              <div class="w-10 h-10 rounded-xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-lg shadow-sm">
                 <iconify-icon icon="lucide:user-check"></iconify-icon>
               </div>
               <div>
                 <h4 class="text-sm font-bold text-[#13224B]">Profile Information</h4>
-                <p class="text-[11px] text-[#8890AA]">Update your contact name and company details.</p>
+                <p class="text-[11px] text-[#8890AA]">Update your full name and company representation.</p>
               </div>
             </div>
 
@@ -713,7 +569,7 @@ try {
                 <input type="email" id="prof_email" disabled
                        value="<?= htmlspecialchars($currentUserProfile['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                        class="w-full px-4 py-2.5 rounded-xl border border-[rgba(19,34,75,0.08)] bg-gray-100 text-xs font-semibold text-gray-500 cursor-not-allowed">
-                <p class="text-[10px] text-[#8890AA] mt-1">Contact studio support if you need to transfer this account to a new email.</p>
+                <p class="text-[10px] text-[#8890AA] mt-1">Contact studio support if you need to transfer this account to a new email address.</p>
               </div>
 
               <div>
@@ -734,9 +590,9 @@ try {
           </div>
 
           <!-- Change Password Form -->
-          <div class="card p-6 sm:p-8 border border-[rgba(19,34,75,0.08)]">
+          <div class="dashboard-card p-6 sm:p-8">
             <div class="flex items-center gap-3 mb-6">
-              <div class="w-10 h-10 rounded-xl bg-purple-50 text-[#6C5BB5] flex items-center justify-center text-lg">
+              <div class="w-10 h-10 rounded-xl bg-purple-50 text-[#6C5BB5] flex items-center justify-center text-lg shadow-sm">
                 <iconify-icon icon="lucide:lock"></iconify-icon>
               </div>
               <div>
@@ -779,7 +635,7 @@ try {
         </div>
       </div>
 
-    </main>
+  </main>
 
 </body>
 </html>

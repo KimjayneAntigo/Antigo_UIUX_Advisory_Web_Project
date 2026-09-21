@@ -31,8 +31,12 @@ if (empty($currentActive)) {
         $currentActive = 'inquiries';
     } elseif (str_contains($script, 'payments.php')) {
         $currentActive = 'payments';
-    } elseif (str_contains($script, 'project-detail.php') || str_contains($script, 'admin-project.php')) {
+    } elseif (str_contains($script, 'bookings.php')) {
+        $currentActive = 'bookings';
+    } elseif (str_contains($script, 'projects.php') || str_contains($script, 'project-detail.php') || str_contains($script, 'admin-project.php')) {
         $currentActive = 'projects';
+    } elseif (str_contains($script, 'clients.php')) {
+        $currentActive = 'clients';
     } elseif (str_contains($script, 'profile.php')) {
         $currentActive = 'settings';
     } else {
@@ -41,12 +45,12 @@ if (empty($currentActive)) {
 }
 
 $navItems = [
-    ['Overview',  $base . 'admin-dashboard.php',          'overview'],
-    ['Inquiries', $base . 'admin/inquiries.php',          'inquiries'],
-    ['Payments',  $base . 'admin/payments.php',           'payments'],
-    ['Bookings',  $base . 'admin-dashboard.php#bookings', 'bookings'],
-    ['Projects',  $base . 'admin-dashboard.php#projects', 'projects'],
-    ['Clients',   $base . 'admin-dashboard.php#clients',  'clients'],
+    ['Overview',  $base . 'admin-dashboard.php', 'overview'],
+    ['Inquiries', $base . 'admin/inquiries.php', 'inquiries'],
+    ['Payments',  $base . 'admin/payments.php',  'payments'],
+    ['Bookings',  $base . 'admin/bookings.php',  'bookings'],
+    ['Projects',  $base . 'admin/projects.php',  'projects'],
+    ['Clients',   $base . 'admin/clients.php',   'clients'],
 ];
 ?>
 <header class="w-full bg-[#13224B] text-white sticky top-0 z-50 shadow-md border-b border-white/10">

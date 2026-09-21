@@ -553,14 +553,14 @@ function file_icon(string $name): string
 
         <!-- Left: back + breadcrumb -->
         <div class="flex items-center gap-3 min-w-0">
-            <a href="../admin-dashboard.php"
+            <a href="projects.php"
                class="flex-shrink-0 w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition-all"
-               title="Back to Dashboard">
+               title="Back to Projects">
                 <iconify-icon icon="lucide:arrow-left" class="text-base"></iconify-icon>
             </a>
             <div class="min-w-0">
                 <p class="text-[9px] font-bold uppercase tracking-widest text-[#DDEBFF] flex items-center gap-1 flex-wrap">
-                    <a href="../admin-dashboard.php" class="hover:underline">Projects</a>
+                    <a href="projects.php" class="hover:underline">Projects</a>
                     <iconify-icon icon="lucide:chevron-right" class="text-[10px]"></iconify-icon>
                     <span><?= htmlspecialchars($project['title'], ENT_QUOTES, 'UTF-8') ?></span>
                 </p>

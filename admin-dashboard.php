@@ -1,15 +1,20 @@
 <?php
-require_once 'config/session.php';
+/**
+ * Studio Command Center & Executive Overview.
+ * High-level performance KPIs, lead qualification preview, active project sprints, and scheduling highlights.
+ */
+
+require_once __DIR__ . '/config/session.php';
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header('Location: login.php');
     exit;
 }
 
-require_once 'config/db.php';
-require_once 'includes/functions.php';
-require_once 'includes/routing.php';
+require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/includes/routing.php';
 
-// Handle POST actions
+// Handle POST actions (e.g. quick conversion from overview)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
         set_flash('error', 'Invalid or expired security token. Please try again.');
@@ -24,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $res = convert_inquiry_to_project($pdo, $inquiryId);
         if ($res['success']) {
             set_flash('success', "Inquiry successfully converted to Project {$res['project_code']}!");
-            safe_redirect("admin-project.php?id={$res['project_id']}");
+            safe_redirect("admin/project-detail.php?id={$res['project_id']}");
         } else {
             set_flash('error', $res['error'] ?? 'Database error converting inquiry to project.');
             safe_redirect('admin-dashboard.php');
@@ -77,62 +82,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         safe_redirect('admin-dashboard.php');
     }
-
-    // Update Booking Status Action
-    if ($action === 'update_booking_status') {
-        $bookingId = (int) ($_POST['booking_id'] ?? 0);
-        $newStatus = trim($_POST['status'] ?? '');
-        $bookingWhitelist = ['pending', 'confirmed', 'completed', 'cancelled'];
-        if ($bookingId > 0 && in_array($newStatus, $bookingWhitelist, true)) {
-            try {
-                $stmt = $pdo->prepare('UPDATE bookings SET status = ? WHERE id = ?');
-                $stmt->execute([$newStatus, $bookingId]);
-                set_flash('success', 'Booking marked as ' . ucfirst($newStatus) . '.');
-            } catch (\PDOException $e) {
-                error_log('admin-dashboard update_booking_status error: ' . $e->getMessage());
-                set_flash('error', 'Database error updating booking.');
-            }
-        }
-        safe_redirect('admin-dashboard.php#bookings');
-    }
-
-    // Delete / Cancel Booking Action
-    if ($action === 'delete_booking') {
-        $bookingId = (int) ($_POST['booking_id'] ?? 0);
-        if ($bookingId > 0) {
-            try {
-                $delStmt = $pdo->prepare('DELETE FROM bookings WHERE id = ?');
-                $delStmt->execute([$bookingId]);
-                set_flash('success', 'Consultation booking deleted successfully.');
-            } catch (\PDOException $e) {
-                error_log('admin-dashboard delete_booking error: ' . $e->getMessage());
-                set_flash('error', 'Database error deleting booking.');
-            }
-        }
-        safe_redirect('admin-dashboard.php#bookings');
-    }
 }
 
-// Fetch live data from MySQL
-$inquiries = [];
-$bookings  = [];
-$projects  = [];
-$clients   = [];
-$totalPipeline = 0;
+// Fetch live data from MySQL for executive overview
+$inquiries        = [];
+$bookings         = [];
+$projects         = [];
+$activeProjects   = [];
+$recentPayments   = [];
+$totalPipeline    = 0;
+$totalInquiries   = 0;
+$pendingInquiries = 0;
+$upcomingBookings = 0;
 
 try {
-    $inquiries = $pdo->query('SELECT * FROM inquiries ORDER BY created_at DESC')->fetchAll();
-    $bookings  = $pdo->query('SELECT * FROM bookings ORDER BY date DESC, time DESC')->fetchAll();
-    $projects  = $pdo->query('SELECT * FROM projects ORDER BY created_at DESC')->fetchAll();
-    $clients   = $pdo->query("SELECT u.*, COUNT(p.id) AS project_count FROM users u LEFT JOIN projects p ON u.id = p.user_id WHERE u.role = 'client' GROUP BY u.id ORDER BY u.created_at DESC")->fetchAll();
+    // Total counts
+    $totalInquiries   = (int) $pdo->query('SELECT COUNT(*) FROM inquiries')->fetchColumn();
+    $pendingInquiries = (int) $pdo->query("SELECT COUNT(*) FROM inquiries WHERE status = 'new'")->fetchColumn();
+    $upcomingBookings = (int) $pdo->query("SELECT COUNT(*) FROM bookings WHERE status IN ('pending', 'confirmed')")->fetchColumn();
 
-    $activeProjectsCount = 0;
-    foreach ($projects as $p) {
+    // Latest 5 Inquiries
+    $inquiries = $pdo->query('SELECT * FROM inquiries ORDER BY created_at DESC LIMIT 5')->fetchAll();
+
+    // Upcoming 4 Bookings
+    $bookings  = $pdo->query("SELECT * FROM bookings WHERE status != 'cancelled' ORDER BY date ASC, time ASC LIMIT 4")->fetchAll();
+
+    // Active Projects
+    $allProjects = $pdo->query('SELECT * FROM projects ORDER BY updated_at DESC, created_at DESC')->fetchAll();
+    foreach ($allProjects as $p) {
         if (($p['status_type'] ?? '') !== 'cancelled') {
-            $activeProjectsCount++;
             $totalPipeline += parse_budget_amount($p['budget'] ?? '');
+            if (($p['status_type'] ?? '') !== 'completed' && ($p['status'] ?? '') !== 'Delivered') {
+                $activeProjects[] = $p;
+            }
         }
     }
+
+    // Recent Payments
+    $recentPayments = $pdo->query(
+        "SELECT pay.*, p.title AS project_title, p.project_code, u.name AS client_name 
+         FROM payments pay 
+         JOIN projects p ON pay.project_id = p.id 
+         JOIN users u ON pay.user_id = u.id 
+         ORDER BY pay.submitted_at DESC 
+         LIMIT 3"
+    )->fetchAll();
+
 } catch (\PDOException $e) {
     error_log('admin-dashboard fetch error: ' . $e->getMessage());
 }
@@ -140,447 +135,350 @@ try {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard — Studio Command Center | Antigo Advisory</title>
-    
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Iconify -->
-    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
-    
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        navy: '#13224B',
-                        violet: '#6C5BB5',
-                        brandBlue: '#4C6CCB',
-                        'light-blue': '#DDEBFF',
-                        'light-gray': '#F4F6F8',
-                        'dark-gray': '#4b4b4b',
-                        'text-primary': '#13224B',
-                        'text-soft': '#4b4b4b',
-                        'text-faint': '#8890AA',
-                        'surface-alt': '#F4F6F8',
-                    },
-                    fontFamily: {
-                        poppins: ['Poppins', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
-    
+    <?php require_once __DIR__ . '/includes/head-common.php'; ?>
+    <title>Admin Overview — Studio Command Center | Antigo Advisory</title>
     <style>
-        :root {
-            --navy: #13224B;
-            --violet: #6C5BB5;
-            --blue: #4C6CCB;
-            --white: #FFFFFF;
-            --light-blue: #DDEBFF;
-            --light-gray: #F4F6F8;
-            --dark-gray: #4b4b4b;
-            --text: #13224B;
-            --text-soft: #4b4b4b;
-            --text-faint: #8890AA;
-            --surface: #FFFFFF;
-            --surface-alt: #F4F6F8;
-            --border: rgba(19, 34, 75, 0.09);
-            --grad: linear-gradient(100deg, #13224B 0%, #6C5BB5 55%, #4C6CCB 100%);
-            --grad-soft: linear-gradient(135deg, #4C6CCB, #6C5BB5);
-        }
-
-        body {
-            font-family: 'Poppins', sans-serif;
-            background-color: var(--surface-alt);
-            color: var(--text);
-            margin: 0;
-            padding: 0;
-            -webkit-font-smoothing: antialiased;
-        }
-
         .admin-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
+            background: #FFFFFF;
+            border: 1px solid rgba(19, 34, 75, 0.08);
             border-radius: 20px;
             box-shadow: 0 4px 18px -4px rgba(19, 34, 75, 0.05);
         }
-
-        .badge-new { background: #FFF1D6; color: #946200; }
-        .badge-contacted { background: #DDEBFF; color: #13224B; }
-        .badge-reviewed { background: rgba(108,91,181,0.12); color: #6C5BB5; }
-        .badge-converted { background: #DFF6E8; color: #127A45; }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            text-decoration: none;
+        .badge-new        { background: #FFF1D6; color: #946200; }
+        .badge-contacted  { background: #DDEBFF; color: #13224B; }
+        .badge-reviewed   { background: rgba(108,91,181,0.12); color: #6C5BB5; }
+        .badge-converted  { background: #DFF6E8; color: #127A45; }
+        .progress-track {
+            background: rgba(19,34,75,0.07);
+            border-radius: 99px;
+            height: 6px;
+            overflow: hidden;
         }
-        .logo-text {
-            line-height: 1.15;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-        .logo-text .word {
-            font-weight: 800;
-            font-size: 18px;
-            letter-spacing: 0.05em;
-            color: #FFFFFF;
-            line-height: 1.1;
-        }
-        .logo-text .sub {
-            font-size: 9px;
-            letter-spacing: 0.22em;
-            color: #DDEBFF;
-            text-transform: uppercase;
-            font-weight: 700;
-            line-height: 1.1;
-            margin-top: 2px;
+        .progress-fill {
+            background: linear-gradient(135deg, #4C6CCB, #6C5BB5);
+            height: 100%;
+            border-radius: 99px;
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="min-h-screen bg-[#F4F6F8]">
 
-    <!-- Admin Top Nav (Horizontal Navigation Bar) -->
+    <!-- Admin Top Horizontal Navbar -->
     <?php $activePage = 'overview'; require_once __DIR__ . '/includes/header-admin.php'; ?>
 
     <!-- Flash Messages -->
-    <div class="max-w-[1440px] mx-auto px-6 lg:px-10 pt-6 w-full">
+    <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 w-full">
         <?= render_flash() ?>
     </div>
 
     <!-- Admin Content -->
-    <main class="flex-1 max-w-[1440px] w-full mx-auto px-6 lg:px-10 py-4 space-y-8">
+    <main class="max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-8">
         
-        <!-- Header Introduction -->
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-                <h1 class="text-2xl sm:text-3xl font-extrabold text-[#13224B] tracking-tight">Studio Pipeline Overview</h1>
-                <p class="text-sm text-[#4b4b4b] mt-1">Review incoming project leads, manage scheduled consultations, and oversee active design delivery.</p>
-            </div>
-            <div class="flex items-center gap-2">
-                <span class="px-3.5 py-1.5 rounded-full bg-white border border-[rgba(19,34,75,0.08)] text-xs font-bold text-[#13224B] shadow-sm flex items-center gap-2">
-                    <iconify-icon icon="lucide:database" class="text-[#6C5BB5]"></iconify-icon>
-                    <span>Connected to MySQL Database</span>
-                </span>
+        <!-- Header Introduction Banner -->
+        <div class="card p-6 sm:p-8 bg-gradient-to-r from-[#13224B] via-[#21356f] to-[#4C6CCB] text-white border-0 shadow-lg relative overflow-hidden rounded-3xl">
+            <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div class="space-y-2">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-white/15 text-[#DDEBFF]">
+                        <iconify-icon icon="lucide:shield-check" class="text-emerald-300"></iconify-icon>
+                        Studio Command Center
+                    </span>
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                        Welcome back, Kimberly!
+                    </h1>
+                    <p class="text-xs sm:text-sm text-[#DDEBFF] max-w-xl leading-relaxed">
+                        Track live client lead qualification, monitor active design delivery sprints, and oversee scheduled advisory sessions.
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-3 flex-shrink-0">
+                    <a href="admin/inquiries.php"
+                       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-[#13224B] bg-white hover:bg-[#DDEBFF] shadow transition-all">
+                        <iconify-icon icon="lucide:inbox" class="text-sm text-[#4C6CCB]"></iconify-icon>
+                        <span>Review Leads (<?= $pendingInquiries ?> new)</span>
+                    </a>
+                    <a href="admin/bookings.php"
+                       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 transition-all">
+                        <iconify-icon icon="lucide:calendar"></iconify-icon>
+                        <span>Calendar</span>
+                    </a>
+                </div>
             </div>
         </div>
 
         <!-- Metric Stat Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <!-- Pipeline Value -->
             <div class="admin-card p-6">
                 <div class="flex items-center justify-between mb-3">
-                    <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Inquiries Captured</span>
-                    <div class="w-9 h-9 rounded-xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-lg">
-                        <iconify-icon icon="lucide:inbox"></iconify-icon>
-                    </div>
-                </div>
-                <div class="text-3xl font-extrabold text-[#13224B]"><?= count($inquiries) ?></div>
-                <div class="text-xs text-[#6C5BB5] font-semibold mt-1">Canonical intake queue</div>
-            </div>
-
-            <div class="admin-card p-6">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Scheduled Sessions</span>
-                    <div class="w-9 h-9 rounded-xl bg-[#FFF1D6] text-[#946200] flex items-center justify-center text-lg">
-                        <iconify-icon icon="lucide:calendar-clock"></iconify-icon>
-                    </div>
-                </div>
-                <div class="text-3xl font-extrabold text-[#13224B]"><?= count($bookings) ?></div>
-                <div class="text-xs text-[#8890AA] mt-1">Live calendar slots</div>
-            </div>
-
-            <div class="admin-card p-6">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Active Projects</span>
-                    <div class="w-9 h-9 rounded-xl bg-purple-50 text-[#6C5BB5] flex items-center justify-center text-lg">
-                        <iconify-icon icon="lucide:kanban"></iconify-icon>
-                    </div>
-                </div>
-                <div class="text-3xl font-extrabold text-[#13224B]"><?= $activeProjectsCount ?></div>
-                <div class="text-xs text-[#8890AA] mt-1">In design / review</div>
-            </div>
-
-            <div class="admin-card p-6">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Pipeline Value</span>
-                    <div class="w-9 h-9 rounded-xl bg-[#DFF6E8] text-[#127A45] flex items-center justify-center text-lg">
+                    <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Active Pipeline Value</span>
+                    <div class="w-9 h-9 rounded-xl bg-[#DFF6E8] text-[#127A45] flex items-center justify-center text-lg shadow-sm">
                         <iconify-icon icon="lucide:circle-dollar-sign"></iconify-icon>
                     </div>
                 </div>
                 <div class="text-3xl font-extrabold text-[#13224B]">$<?= number_format($totalPipeline) ?></div>
-                <div class="text-xs text-[#127A45] font-semibold mt-1">Total Pipeline ($ USD)</div>
+                <div class="text-xs text-[#127A45] font-semibold mt-1">Total active studio budget ($ USD)</div>
             </div>
+
+            <!-- Active Projects -->
+            <a href="admin/projects.php" class="admin-card p-6 block hover:border-[#4C6CCB] transition-all group">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Active Projects</span>
+                    <div class="w-9 h-9 rounded-xl bg-purple-50 text-[#6C5BB5] flex items-center justify-center text-lg shadow-sm group-hover:scale-105 transition-transform">
+                        <iconify-icon icon="lucide:kanban"></iconify-icon>
+                    </div>
+                </div>
+                <div class="text-3xl font-extrabold text-[#13224B]"><?= count($activeProjects) ?></div>
+                <div class="text-xs text-[#6C5BB5] font-semibold mt-1 flex items-center gap-1">
+                    <span>Manage sprints &rarr;</span>
+                </div>
+            </a>
+
+            <!-- Inquiries Captured -->
+            <a href="admin/inquiries.php" class="admin-card p-6 block hover:border-[#4C6CCB] transition-all group">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Inquiries Queue</span>
+                    <div class="w-9 h-9 rounded-xl bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-lg shadow-sm group-hover:scale-105 transition-transform">
+                        <iconify-icon icon="lucide:inbox"></iconify-icon>
+                    </div>
+                </div>
+                <div class="text-3xl font-extrabold text-[#13224B]"><?= $totalInquiries ?></div>
+                <div class="text-xs text-[#4C6CCB] font-semibold mt-1 flex items-center gap-1">
+                    <span><?= $pendingInquiries ?> new awaiting review &rarr;</span>
+                </div>
+            </a>
+
+            <!-- Scheduled Sessions -->
+            <a href="admin/bookings.php" class="admin-card p-6 block hover:border-[#4C6CCB] transition-all group">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-[#8890AA]">Scheduled Sessions</span>
+                    <div class="w-9 h-9 rounded-xl bg-[#FFF1D6] text-[#946200] flex items-center justify-center text-lg shadow-sm group-hover:scale-105 transition-transform">
+                        <iconify-icon icon="lucide:calendar-clock"></iconify-icon>
+                    </div>
+                </div>
+                <div class="text-3xl font-extrabold text-[#13224B]"><?= $upcomingBookings ?></div>
+                <div class="text-xs text-[#946200] font-semibold mt-1 flex items-center gap-1">
+                    <span>Upcoming consultations &rarr;</span>
+                </div>
+            </a>
         </div>
 
-        <!-- Section 1: Inquiries Lead Qualification Queue -->
-        <div class="admin-card p-6 sm:p-8" id="inquiries">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h2 class="text-lg font-bold text-[#13224B]">Inquiry Leads Queue (Canonical Intake)</h2>
-                    <p class="text-xs text-[#8890AA] mt-0.5">Admin reviews and qualifies incoming project leads from the Inquiry page.</p>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-xs text-[#8890AA]"><?= count($inquiries) ?> Total Leads</span>
-                </div>
-            </div>
-
-            <!-- Inquiries Table -->
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs">
-                    <thead>
-                        <tr class="border-b border-[rgba(19,34,75,0.08)] text-[#8890AA] uppercase tracking-wider font-bold">
-                            <th class="py-3.5 px-4">Ref ID</th>
-                            <th class="py-3.5 px-4">Lead Name &amp; Company</th>
-                            <th class="py-3.5 px-4">Service</th>
-                            <th class="py-3.5 px-4">Budget Range</th>
-                            <th class="py-3.5 px-4">Timeline</th>
-                            <th class="py-3.5 px-4">Status</th>
-                            <th class="py-3.5 px-4 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-[rgba(19,34,75,0.06)]">
-                        <?php if (empty($inquiries)): ?>
-                            <tr>
-                                <td colspan="7" class="py-8 text-center text-xs text-[#8890AA]">No inquiries received yet.</td>
-                            </tr>
-                        <?php else: ?>
-                            <?php foreach ($inquiries as $inq): 
-                                $status = strtolower($inq['status'] ?? 'new');
-                                $badgeClass = 'badge-new';
-                                if ($status === 'reviewed') $badgeClass = 'badge-reviewed';
-                                if ($status === 'contacted') $badgeClass = 'badge-contacted';
-                                if ($status === 'converted') $badgeClass = 'badge-converted';
-                            ?>
-                                <tr class="hover:bg-[#F4F6F8] transition-colors">
-                                    <td class="py-4 px-4 font-mono font-bold text-[#13224B]">INQ-<?= str_pad((string)$inq['id'], 5, '0', STR_PAD_LEFT) ?></td>
-                                    <td class="py-4 px-4">
-                                        <div class="font-bold text-[#13224B]"><?= htmlspecialchars($inq['name']) ?></div>
-                                        <div class="text-[10px] text-[#8890AA]"><?= htmlspecialchars($inq['company'] ?: $inq['email']) ?></div>
-                                    </td>
-                                    <td class="py-4 px-4 font-semibold text-[#13224B]"><?= htmlspecialchars($inq['service'] ?? 'UI/UX Design') ?></td>
-                                    <td class="py-4 px-4 font-bold text-[#4C6CCB]"><?= htmlspecialchars($inq['budget'] ?? 'TBD') ?></td>
-                                    <td class="py-4 px-4 text-[#4b4b4b]"><?= htmlspecialchars($inq['timeline'] ?? 'Flexible') ?></td>
-                                    <td class="py-4 px-4">
-                                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold <?= $badgeClass ?> uppercase tracking-wider"><?= htmlspecialchars($inq['status']) ?></span>
-                                    </td>
-                                    <td class="py-4 px-4 text-right whitespace-nowrap space-x-1">
-                                        <button type="button" onclick="openInquiryModal(<?= (int)$inq['id'] ?>)" class="px-3 py-1.5 rounded-lg border border-[rgba(19,34,75,0.12)] text-xs font-bold text-[#13224B] hover:bg-white transition-colors">
-                                            Review
-                                        </button>
-                                        <form method="POST" action="admin-dashboard.php" onsubmit="return confirm('Are you sure you want to delete this inquiry?');" class="inline">
-                                            <?= csrf_input() ?>
-                                            <input type="hidden" name="action" value="delete_inquiry">
-                                            <input type="hidden" name="inquiry_id" value="<?= (int)$inq['id'] ?>">
-                                            <button type="submit" class="p-1.5 rounded-lg border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors" title="Delete inquiry">
-                                                <iconify-icon icon="lucide:trash-2" class="text-sm"></iconify-icon>
-                                            </button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Section 2: Booked Consultations Calendar Grid -->
-        <div class="admin-card p-6 sm:p-8" id="bookings">
-            <div class="flex items-center justify-between mb-6">
-                <div>
-                    <h2 class="text-lg font-bold text-[#13224B]">Scheduled Consultations</h2>
-                    <p class="text-xs text-[#8890AA] mt-0.5">Bookings created directly by clients from the Book Consultation page.</p>
-                </div>
-                <span class="text-xs text-[#8890AA]"><?= count($bookings) ?> Bookings</span>
-            </div>
-
-            <!-- Bookings Table -->
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs">
-                    <thead>
-                        <tr class="border-b border-[rgba(19,34,75,0.08)] text-[#8890AA] uppercase tracking-wider font-bold">
-                            <th class="py-3.5 px-4">Booking ID</th>
-                            <th class="py-3.5 px-4">Client</th>
-                            <th class="py-3.5 px-4">Service &amp; Duration</th>
-                            <th class="py-3.5 px-4">Rate</th>
-                            <th class="py-3.5 px-4">Date &amp; Time</th>
-                            <th class="py-3.5 px-4">Meeting Format</th>
-                            <th class="py-3.5 px-4">Status</th>
-                            <th class="py-3.5 px-4 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-[rgba(19,34,75,0.06)]">
-                        <?php if (empty($bookings)): ?>
-                            <tr>
-                                <td colspan="8" class="py-8 text-center text-xs text-[#8890AA]">No consultations booked yet.</td>
-                            </tr>
-                        <?php else: ?>
-                            <?php foreach ($bookings as $b): ?>
-                                <tr class="hover:bg-[#F4F6F8] transition-colors">
-                                    <td class="py-4 px-4 font-mono font-bold text-[#13224B]"><?= htmlspecialchars($b['booking_code'] ?? 'BKG-' . $b['id']) ?></td>
-                                    <td class="py-4 px-4">
-                                        <div class="font-bold text-[#13224B]"><?= htmlspecialchars($b['client_name']) ?></div>
-                                        <div class="text-[10px] text-[#8890AA]"><?= htmlspecialchars($b['client_email']) ?></div>
-                                    </td>
-                                    <td class="py-4 px-4">
-                                        <span class="font-bold text-[#13224B]"><?= htmlspecialchars($b['service']) ?></span>
-                                        <span class="text-[10px] text-[#6C5BB5] font-semibold block"><?= htmlspecialchars($b['duration'] ?? '45 Mins') ?></span>
-                                    </td>
-                                    <td class="py-4 px-4 font-bold text-[#4C6CCB]"><?= htmlspecialchars($b['price'] ?? '$150') ?></td>
-                                    <td class="py-4 px-4 font-semibold text-[#13224B]"><?= htmlspecialchars($b['date']) ?> &middot; <?= htmlspecialchars($b['time']) ?></td>
-                                    <td class="py-4 px-4 text-[#4b4b4b]"><?= htmlspecialchars($b['format'] ?? 'Google Meet') ?></td>
-                                    <td class="py-4 px-4">
-                                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#DFF6E8] text-[#127A45] uppercase tracking-wider"><?= htmlspecialchars($b['status'] ?? 'confirmed') ?></span>
-                                    </td>
-                                    <td class="py-4 px-4 text-right whitespace-nowrap space-x-1">
-                                        <?php if (($b['status'] ?? '') !== 'confirmed'): ?>
-                                            <form method="POST" action="admin-dashboard.php" class="inline">
-                                                <?= csrf_input() ?>
-                                                <input type="hidden" name="action" value="update_booking_status">
-                                                <input type="hidden" name="booking_id" value="<?= (int)$b['id'] ?>">
-                                                <input type="hidden" name="status" value="confirmed">
-                                                <button type="submit" class="px-2 py-1 rounded bg-[#DDEBFF] text-[#4C6CCB] text-[10px] font-bold hover:bg-[#c9ddff]" title="Confirm Booking">
-                                                    Confirm
-                                                </button>
-                                            </form>
-                                        <?php endif; ?>
-                                        <?php if (($b['status'] ?? '') !== 'completed'): ?>
-                                            <form method="POST" action="admin-dashboard.php" class="inline">
-                                                <?= csrf_input() ?>
-                                                <input type="hidden" name="action" value="update_booking_status">
-                                                <input type="hidden" name="booking_id" value="<?= (int)$b['id'] ?>">
-                                                <input type="hidden" name="status" value="completed">
-                                                <button type="submit" class="px-2 py-1 rounded bg-[#DFF6E8] text-[#127A45] text-[10px] font-bold hover:bg-[#c7f3d8]" title="Mark Completed">
-                                                    Complete
-                                                </button>
-                                            </form>
-                                        <?php endif; ?>
-                                        <form method="POST" action="admin-dashboard.php" onsubmit="return confirm('Are you sure you want to cancel and delete this booking?');" class="inline">
-                                            <?= csrf_input() ?>
-                                            <input type="hidden" name="action" value="delete_booking">
-                                            <input type="hidden" name="booking_id" value="<?= (int)$b['id'] ?>">
-                                            <button type="submit" class="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-50" title="Delete Booking">
-                                                <iconify-icon icon="lucide:trash-2" class="text-sm"></iconify-icon>
-                                            </button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Section 3: Active Studio Projects -->
-        <div class="admin-card p-6 sm:p-8" id="projects">
-            <div class="flex items-center justify-between mb-6">
-                <div>
-                    <h2 class="text-lg font-bold text-[#13224B]">Active Client Projects</h2>
-                    <p class="text-xs text-[#8890AA] mt-0.5">Direct link into full admin project control and phase stepper management.</p>
-                </div>
-                <span class="text-xs text-[#8890AA]"><?= count($projects) ?> Projects</span>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <?php if (empty($projects)): ?>
-                    <p class="text-xs text-[#8890AA] col-span-3 py-8 text-center">No projects in pipeline yet.</p>
-                <?php else: ?>
-                    <?php foreach ($projects as $p): ?>
-                        <div class="p-6 rounded-2xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.06)] flex flex-col justify-between">
-                            <div>
-                                <div class="flex justify-between items-start mb-3">
-                                    <span class="text-[10px] font-bold uppercase tracking-widest text-[#6C5BB5]"><?= htmlspecialchars($p['category'] ?? 'UI/UX Design') ?></span>
-                                    <?php if (($p['status_type'] ?? '') === 'cancelled'): ?>
-                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold border" style="background: rgba(239, 68, 68, 0.12); color: #ef4444; border-color: rgba(239, 68, 68, 0.25);">Cancelled</span>
-                                    <?php else: ?>
-                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white text-[#13224B] border border-[rgba(19,34,75,0.08)]"><?= htmlspecialchars($p['status'] ?? 'Discovery') ?></span>
-                                    <?php endif; ?>
-                                </div>
-                                <h4 class="text-base font-bold text-[#13224B] mb-1"><?= htmlspecialchars($p['title']) ?></h4>
-                                <p class="text-xs text-[#8890AA] mb-4"><?= htmlspecialchars($p['client_name']) ?> (<?= htmlspecialchars($p['company'] ?: 'Client') ?>)</p>
-
-                                <div class="mb-4">
-                                    <div class="flex justify-between text-xs mb-1">
-                                        <span class="text-[#4b4b4b]">Phase: <strong><?= htmlspecialchars($p['phase_name'] ?? 'Discovery & Research') ?></strong></span>
-                                        <span class="font-bold text-[#6C5BB5]"><?= (int)($p['progress'] ?? 20) ?>%</span>
-                                    </div>
-                                    <div class="w-full h-2 rounded-full bg-white overflow-hidden border border-[rgba(19,34,75,0.06)]">
-                                        <div class="h-full rounded-full bg-gradient-to-r from-[#4C6CCB] to-[#6C5BB5]" style="width: <?= (int)($p['progress'] ?? 20) ?>%"></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="pt-3 border-t border-[rgba(19,34,75,0.06)] flex justify-between items-center">
-                                <span class="text-sm font-extrabold text-[#13224B]"><?= htmlspecialchars($p['budget'] ?: '$150,000') ?></span>
-                                <a href="admin/project-detail.php?id=<?= (int)$p['id'] ?>" class="px-3.5 py-1.5 rounded-lg bg-white border border-[rgba(19,34,75,0.1)] text-xs font-bold text-[#4C6CCB] hover:bg-[#DDEBFF] transition-colors">
-                                    Control Panel &rarr;
-                                </a>
-                            </div>
+        <!-- Main Grid: Active Sprints (Left 2 Cols) + Quick Feeds (Right 1 Col) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            
+            <!-- Left: Active Sprints & Recent Leads (2 Cols) -->
+            <div class="lg:col-span-2 space-y-8">
+                
+                <!-- Section: Active Project Sprints Spotlight -->
+                <div class="admin-card p-6 sm:p-7">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-lg font-bold text-[#13224B]">Active Project Sprints</h2>
+                            <p class="text-xs text-[#8890AA] mt-0.5">Live status and milestone progress for currently ongoing studio projects.</p>
                         </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
-        </div>
+                        <a href="admin/projects.php" class="text-xs font-bold text-[#4C6CCB] hover:text-[#6C5BB5] flex items-center gap-1">
+                            <span>View All Projects &rarr;</span>
+                        </a>
+                    </div>
 
-        <!-- Section 4: Registered Clients Directory -->
-        <div class="admin-card p-6 sm:p-8" id="clients">
-            <div class="flex items-center justify-between mb-6">
-                <div>
-                    <h2 class="text-lg font-bold text-[#13224B]">Registered Client Accounts</h2>
-                    <p class="text-xs text-[#8890AA] mt-0.5">Directory of client accounts registered in the client portal and their projects.</p>
-                </div>
-                <span class="text-xs text-[#8890AA]"><?= count($clients) ?> Clients</span>
-            </div>
-
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs">
-                    <thead>
-                        <tr class="border-b border-[rgba(19,34,75,0.08)] text-[#8890AA] uppercase tracking-wider font-bold">
-                            <th class="py-3.5 px-4">Client Name</th>
-                            <th class="py-3.5 px-4">Email</th>
-                            <th class="py-3.5 px-4">Company</th>
-                            <th class="py-3.5 px-4">Active Projects</th>
-                            <th class="py-3.5 px-4">Member Since</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-[rgba(19,34,75,0.06)]">
-                        <?php if (empty($clients)): ?>
-                            <tr>
-                                <td colspan="5" class="py-8 text-center text-xs text-[#8890AA]">No client accounts registered yet.</td>
-                            </tr>
-                        <?php else: ?>
-                            <?php foreach ($clients as $cl): ?>
-                                <tr class="hover:bg-[#F4F6F8] transition-colors">
-                                    <td class="py-4 px-4 font-bold text-[#13224B]">
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-7 h-7 rounded-full bg-gradient-to-r from-[#4C6CCB] to-[#6C5BB5] text-white font-bold flex items-center justify-center text-[10px]">
-                                                <?= strtoupper(substr($cl['name'], 0, 1)) ?>
-                                            </div>
-                                            <span><?= htmlspecialchars($cl['name']) ?></span>
+                    <?php if (empty($activeProjects)): ?>
+                        <div class="py-10 text-center text-xs text-[#8890AA]">
+                            No active project sprints right now. Convert an incoming lead to start a project.
+                        </div>
+                    <?php else: ?>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <?php foreach (array_slice($activeProjects, 0, 4) as $p): ?>
+                                <div class="p-5 rounded-2xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.06)] flex flex-col justify-between hover:shadow-md transition-all">
+                                    <div>
+                                        <div class="flex justify-between items-start mb-2">
+                                            <span class="text-[10px] font-mono font-bold text-[#8890AA]"><?= htmlspecialchars($p['project_code'] ?? 'PRJ-' . $p['id']) ?></span>
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-[#13224B] border border-[rgba(19,34,75,0.08)]">
+                                                <?= htmlspecialchars($p['status'] ?? 'Active') ?>
+                                            </span>
                                         </div>
-                                    </td>
-                                    <td class="py-4 px-4 text-[#4b4b4b]"><?= htmlspecialchars($cl['email']) ?></td>
-                                    <td class="py-4 px-4 text-[#6C5BB5] font-semibold"><?= htmlspecialchars($cl['company'] ?: '—') ?></td>
-                                    <td class="py-4 px-4 font-bold text-[#4C6CCB]"><?= (int)($cl['project_count'] ?? 0) ?></td>
-                                    <td class="py-4 px-4 text-[#8890AA]"><?= date('M j, Y', strtotime($cl['created_at'])) ?></td>
-                                </tr>
+                                        <h4 class="text-sm font-bold text-[#13224B] mb-1 line-clamp-1"><?= htmlspecialchars($p['title']) ?></h4>
+                                        <p class="text-xs text-[#6C5BB5] font-semibold mb-3"><?= htmlspecialchars($p['client_name']) ?> (<?= htmlspecialchars($p['company'] ?: 'Client') ?>)</p>
+
+                                        <div class="mb-4">
+                                            <div class="flex justify-between text-xs mb-1">
+                                                <span class="text-[#4b4b4b] text-[11px]"><?= htmlspecialchars($p['phase_name'] ?? 'In Progress') ?></span>
+                                                <span class="font-extrabold text-[#4C6CCB] text-[11px]"><?= (int)($p['progress'] ?? 0) ?>%</span>
+                                            </div>
+                                            <div class="progress-track">
+                                                <div class="progress-fill" style="width: <?= min(100, max(0, (int)($p['progress'] ?? 0))) ?>%"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="pt-3 border-t border-[rgba(19,34,75,0.06)] flex justify-between items-center">
+                                        <span class="text-xs font-extrabold text-[#13224B]"><?= format_usd($p['budget'] ?? '$0') ?></span>
+                                        <a href="admin/project-detail.php?id=<?= (int)$p['id'] ?>" class="px-3 py-1 rounded-lg bg-white border border-[rgba(19,34,75,0.1)] text-xs font-bold text-[#4C6CCB] hover:bg-[#DDEBFF] transition-colors">
+                                            Control Panel &rarr;
+                                        </a>
+                                    </div>
+                                </div>
                             <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Section: Recent Inquiries Queue -->
+                <div class="admin-card p-6 sm:p-7">
+                    <div class="flex items-center justify-between mb-5">
+                        <div>
+                            <h2 class="text-lg font-bold text-[#13224B]">Recent Inquiry Leads</h2>
+                            <p class="text-xs text-[#8890AA] mt-0.5">Incoming leads submitted via the advisory inquiry form.</p>
+                        </div>
+                        <a href="admin/inquiries.php" class="text-xs font-bold text-[#4C6CCB] hover:text-[#6C5BB5] flex items-center gap-1">
+                            <span>View All (<?= $totalInquiries ?>) &rarr;</span>
+                        </a>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead>
+                                <tr class="border-b border-[rgba(19,34,75,0.08)] bg-[#F4F6F8]/70 text-[#8890AA] uppercase tracking-wider font-bold">
+                                    <th class="py-3 px-3">Lead</th>
+                                    <th class="py-3 px-3">Service &amp; Budget</th>
+                                    <th class="py-3 px-3">Submitted</th>
+                                    <th class="py-3 px-3">Status</th>
+                                    <th class="py-3 px-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-[rgba(19,34,75,0.06)]">
+                                <?php if (empty($inquiries)): ?>
+                                    <tr>
+                                        <td colspan="5" class="py-6 text-center text-xs text-[#8890AA]">No inquiries received yet.</td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($inquiries as $inq): 
+                                        $status = strtolower($inq['status'] ?? 'new');
+                                        $badgeClass = 'badge-new';
+                                        if ($status === 'reviewed') $badgeClass = 'badge-reviewed';
+                                        if ($status === 'contacted') $badgeClass = 'badge-contacted';
+                                        if ($status === 'converted') $badgeClass = 'badge-converted';
+                                    ?>
+                                        <tr class="hover:bg-[#F4F6F8] transition-colors">
+                                            <td class="py-3 px-3">
+                                                <div class="font-bold text-[#13224B]"><?= htmlspecialchars($inq['name']) ?></div>
+                                                <div class="text-[10px] text-[#6C5BB5]"><?= htmlspecialchars($inq['company'] ?: 'Individual') ?></div>
+                                            </td>
+                                            <td class="py-3 px-3">
+                                                <div class="font-semibold text-[#13224B]"><?= htmlspecialchars($inq['service'] ?? 'UI/UX Design') ?></div>
+                                                <div class="text-[10px] text-[#8890AA]"><?= htmlspecialchars($inq['budget'] ?? 'TBD') ?></div>
+                                            </td>
+                                            <td class="py-3 px-3 text-[#8890AA] whitespace-nowrap">
+                                                <?= time_ago($inq['created_at']) ?>
+                                            </td>
+                                            <td class="py-3 px-3">
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold <?= $badgeClass ?> uppercase tracking-wider">
+                                                    <?= htmlspecialchars($inq['status']) ?>
+                                                </span>
+                                            </td>
+                                            <td class="py-3 px-3 text-right whitespace-nowrap space-x-1">
+                                                <button type="button" onclick="openInquiryModal(<?= (int)$inq['id'] ?>)" class="px-2.5 py-1 rounded-lg border border-[rgba(19,34,75,0.12)] text-[11px] font-bold text-[#13224B] hover:bg-white">
+                                                    Review
+                                                </button>
+                                                <a href="admin/inquiries.php" class="px-2.5 py-1 rounded-lg bg-[#DDEBFF] text-[11px] font-bold text-[#13224B] hover:bg-[#c9ddff]">
+                                                    Pipeline &rarr;
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
             </div>
+
+            <!-- Right: Upcoming Agenda & Payment Verification (1 Col) -->
+            <div class="space-y-6">
+                
+                <!-- Upcoming Consultations Card -->
+                <div class="admin-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-[#FFF1D6] text-[#946200] flex items-center justify-center text-sm">
+                                <iconify-icon icon="lucide:calendar"></iconify-icon>
+                            </div>
+                            <h3 class="text-sm font-bold text-[#13224B]">Upcoming Agenda</h3>
+                        </div>
+                        <a href="admin/bookings.php" class="text-[11px] font-bold text-[#4C6CCB] hover:underline">
+                            View All &rarr;
+                        </a>
+                    </div>
+
+                    <?php if (empty($bookings)): ?>
+                        <p class="text-xs text-[#8890AA] py-4 text-center">No upcoming consultations booked.</p>
+                    <?php else: ?>
+                        <div class="space-y-3">
+                            <?php foreach ($bookings as $b): ?>
+                                <div class="p-3.5 rounded-xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.06)] text-xs">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="font-bold text-[#13224B]"><?= htmlspecialchars($b['client_name'] ?: ($b['guest_name'] ?? 'Client')) ?></span>
+                                        <span class="font-mono text-[10px] text-[#4C6CCB] font-bold"><?= htmlspecialchars($b['time'] ?: ($b['booking_time'] ?? '')) ?></span>
+                                    </div>
+                                    <div class="text-[11px] text-[#6C5BB5] font-semibold mb-2">
+                                        <?= htmlspecialchars($b['service'] ?: 'Advisory Consultation') ?> &middot; <?= htmlspecialchars($b['date'] ?: ($b['booking_date'] ?? 'TBD')) ?>
+                                    </div>
+                                    <div class="flex items-center justify-between text-[10px] text-[#8890AA] pt-2 border-t border-[rgba(19,34,75,0.06)]">
+                                        <span><?= htmlspecialchars($b['format'] ?: ($b['meeting_format'] ?? 'Google Meet')) ?></span>
+                                        <a href="admin/bookings.php" class="font-bold text-[#4C6CCB] hover:underline">Details &rarr;</a>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Recent Payments Preview Card -->
+                <div class="admin-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-[#DDEBFF] text-[#4C6CCB] flex items-center justify-center text-sm">
+                                <iconify-icon icon="lucide:credit-card"></iconify-icon>
+                            </div>
+                            <h3 class="text-sm font-bold text-[#13224B]">Payment Ledger</h3>
+                        </div>
+                        <a href="admin/payments.php" class="text-[11px] font-bold text-[#4C6CCB] hover:underline">
+                            Verify &rarr;
+                        </a>
+                    </div>
+
+                    <?php if (empty($recentPayments)): ?>
+                        <p class="text-xs text-[#8890AA] py-4 text-center">No payment declarations recorded yet.</p>
+                    <?php else: ?>
+                        <div class="space-y-3">
+                            <?php foreach ($recentPayments as $pay): 
+                                $paySt = strtolower($pay['status'] ?? 'pending');
+                                $stBadge = 'bg-[#FFF1D6] text-[#946200]';
+                                if ($paySt === 'verified') $stBadge = 'bg-[#DFF6E8] text-[#127A45]';
+                                elseif ($paySt === 'rejected') $stBadge = 'bg-rose-100 text-rose-800';
+                            ?>
+                                <div class="p-3.5 rounded-xl bg-[#F4F6F8] border border-[rgba(19,34,75,0.06)] text-xs">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="font-bold text-[#13224B]"><?= format_payment_ref($pay['id']) ?></span>
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold <?= $stBadge ?> uppercase">
+                                            <?= htmlspecialchars($paySt) ?>
+                                        </span>
+                                    </div>
+                                    <div class="font-extrabold text-sm text-[#13224B] my-1">
+                                        <?= format_usd($pay['amount']) ?>
+                                    </div>
+                                    <div class="text-[10px] text-[#8890AA]">
+                                        <?= htmlspecialchars($pay['client_name']) ?> &middot; <?= htmlspecialchars($pay['project_title']) ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+            </div>
+
         </div>
+
     </main>
 
     <!-- Inquiry Review Modal -->
@@ -620,21 +518,14 @@ try {
                         Redesigning mobile banking dashboard for smoother digital transactions...
                     </p>
                 </div>
-                <div id="modalInqFileBlock" class="hidden">
-                    <span class="font-bold text-[#8890AA] uppercase tracking-wider block mb-1.5">Attached Reference File</span>
-                    <a id="modalInqFileLink" href="#" target="_blank" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#DDEBFF] text-[#13224B] font-semibold hover:underline">
-                        <iconify-icon icon="lucide:file-text" class="text-[#4C6CCB]"></iconify-icon>
-                        <span id="modalInqFileName">brief.pdf</span>
-                    </a>
-                </div>
             </div>
 
             <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[rgba(19,34,75,0.06)]">
                 <div class="flex gap-2">
-                    <button type="button" onclick="setInquiryStatusAction('reviewed')" class="px-4 py-2.5 rounded-xl border border-[rgba(19,34,75,0.12)] text-xs font-bold text-[#13224B] hover:bg-[#F4F6F8]">
+                    <button type="button" onclick="setInquiryStatusAction('reviewed')" class="px-4 py-2 rounded-xl border border-[rgba(19,34,75,0.12)] text-xs font-bold text-[#13224B] hover:bg-[#F4F6F8]">
                         Mark Reviewed
                     </button>
-                    <button type="button" onclick="setInquiryStatusAction('contacted')" class="px-4 py-2.5 rounded-xl border border-[rgba(19,34,75,0.12)] text-xs font-bold text-[#4C6CCB] hover:bg-[#DDEBFF]">
+                    <button type="button" onclick="setInquiryStatusAction('contacted')" class="px-4 py-2 rounded-xl border border-[rgba(19,34,75,0.12)] text-xs font-bold text-[#4C6CCB] hover:bg-[#DDEBFF]">
                         Mark Contacted
                     </button>
                 </div>
@@ -644,18 +535,8 @@ try {
                         <?= csrf_input() ?>
                         <input type="hidden" name="action" value="convert_to_project">
                         <input type="hidden" name="inquiry_id" id="convertInquiryIdInput" value="">
-                        <button type="submit" id="convertSubmitBtn" class="px-6 py-2.5 rounded-xl text-white text-xs font-bold shadow-md hover:scale-105 transition-transform" style="background:var(--grad);">
+                        <button type="submit" id="convertSubmitBtn" class="px-6 py-2.5 rounded-xl text-white text-xs font-bold shadow-md hover:opacity-90 transition-all" style="background: linear-gradient(135deg, #4C6CCB, #6C5BB5);">
                             Convert to Active Project &rarr;
-                        </button>
-                    </form>
-
-                    <form id="modalDeleteInquiryForm" method="POST" action="admin-dashboard.php" onsubmit="return confirm('Are you sure you want to permanently delete this inquiry?');">
-                        <?= csrf_input() ?>
-                        <input type="hidden" name="action" value="delete_inquiry">
-                        <input type="hidden" name="inquiry_id" id="modalDeleteInquiryIdInput" value="">
-                        <button type="submit" class="px-4 py-2.5 rounded-xl border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 inline-flex items-center gap-1.5 transition-colors">
-                            <iconify-icon icon="lucide:trash-2"></iconify-icon>
-                            <span>Delete Lead</span>
                         </button>
                     </form>
                 </div>
@@ -663,7 +544,7 @@ try {
         </div>
     </div>
 
-    <!-- Hidden Form for Status Updates -->
+    <!-- Hidden form for status update -->
     <form id="statusUpdateForm" method="POST" action="admin-dashboard.php" class="hidden">
         <?= csrf_input() ?>
         <input type="hidden" name="action" value="update_status">
@@ -671,66 +552,37 @@ try {
         <input type="hidden" name="status" id="statusValueInput" value="">
     </form>
 
-    <!-- Footer -->
-    <footer class="w-full py-6 text-center text-xs text-[#8890AA] border-t border-[rgba(19,34,75,0.06)] bg-white mt-12">
-        &copy; 2026 Antigo UI/UX Advisory &middot; Studio Administration
-    </footer>
-
     <script>
-        const allInquiries = <?= json_encode($inquiries, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
-        let selectedInquiryId = null;
+        const inquiriesData = <?= json_encode(array_column($inquiries, null, 'id'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 
         function openInquiryModal(id) {
-            selectedInquiryId = id;
-            const inq = allInquiries.find(i => parseInt(i.id) === parseInt(id));
+            const inq = inquiriesData[id];
             if (!inq) return;
 
-            document.getElementById('convertInquiryIdInput').value = inq.id;
-            const delInp = document.getElementById('modalDeleteInquiryIdInput');
-            if (delInp) delInp.value = inq.id;
-            document.getElementById('modalInqId').innerText = 'INQ-' + String(inq.id).padStart(5, '0');
-            document.getElementById('modalInqName').innerText = inq.name;
-            document.getElementById('modalInqCompany').innerText = `${inq.company || 'Direct Client'} · ${inq.email}`;
-            document.getElementById('modalInqService').innerText = inq.service || 'UI/UX Design';
-            document.getElementById('modalInqBudget').innerText = inq.budget || 'TBD';
-            document.getElementById('modalInqTimeline').innerText = inq.timeline || 'Flexible';
-            document.getElementById('modalInqDescription').innerText = inq.description || 'No description provided.';
+            document.getElementById('modalInqId').textContent = inq.ref_code || ('INQ-' + String(inq.id).padStart(5, '0'));
+            document.getElementById('modalInqName').textContent = inq.name;
+            document.getElementById('modalInqCompany').textContent = (inq.company ? inq.company + ' · ' : '') + inq.email;
+            document.getElementById('modalInqService').textContent = inq.service || 'UI/UX Design';
+            document.getElementById('modalInqBudget').textContent = inq.budget || 'TBD';
+            document.getElementById('modalInqTimeline').textContent = inq.timeline || 'Flexible';
+            document.getElementById('modalInqDescription').textContent = inq.description || 'No detailed scope provided.';
             
-            const badge = document.getElementById('modalInqStatusBadge');
-            badge.className = 'px-3 py-1 rounded-full text-xs font-bold';
-            const status = (inq.status || 'new').toLowerCase();
-            if (status === 'reviewed') {
-                badge.classList.add('badge-reviewed');
-                badge.innerText = 'Reviewed';
-            } else if (status === 'contacted') {
-                badge.classList.add('badge-contacted');
-                badge.innerText = 'Contacted';
-            } else if (status === 'converted') {
-                badge.classList.add('badge-converted');
-                badge.innerText = 'Converted';
-            } else {
-                badge.classList.add('badge-new');
-                badge.innerText = 'New Lead';
-            }
+            document.getElementById('convertInquiryIdInput').value = inq.id;
+            document.getElementById('statusInquiryIdInput').value = inq.id;
 
-            const fileBlock = document.getElementById('modalInqFileBlock');
-            if (inq.attached_file) {
-                document.getElementById('modalInqFileName').innerText = inq.attached_file;
-                document.getElementById('modalInqFileLink').href = 'uploads/inquiries/' + inq.attached_file;
-                fileBlock.classList.remove('hidden');
-            } else {
-                fileBlock.classList.add('hidden');
-            }
+            const badge = document.getElementById('modalInqStatusBadge');
+            badge.className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider badge-' + inq.status.toLowerCase();
+            badge.textContent = inq.status;
 
             const convertBtn = document.getElementById('convertSubmitBtn');
-            if (status === 'converted') {
+            if (inq.status === 'converted') {
                 convertBtn.disabled = true;
-                convertBtn.innerText = 'Already Converted';
                 convertBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                convertBtn.textContent = 'Already Converted to Project';
             } else {
                 convertBtn.disabled = false;
-                convertBtn.innerText = 'Convert to Active Project →';
                 convertBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                convertBtn.textContent = 'Convert to Active Project →';
             }
 
             document.getElementById('inquiryDetailModal').classList.remove('hidden');
@@ -738,50 +590,17 @@ try {
 
         function closeInquiryModal() {
             document.getElementById('inquiryDetailModal').classList.add('hidden');
-            selectedInquiryId = null;
         }
 
         function setInquiryStatusAction(status) {
-            if (!selectedInquiryId) return;
-            document.getElementById('statusInquiryIdInput').value = selectedInquiryId;
             document.getElementById('statusValueInput').value = status;
             document.getElementById('statusUpdateForm').submit();
         }
 
-        async function handleConvertSubmit(e) {
-            e.preventDefault();
-            if (!selectedInquiryId) return;
-
-            const btn = document.getElementById('convertSubmitBtn');
-            btn.disabled = true;
-            btn.innerText = 'Converting...';
-
-            const formData = new FormData();
-            formData.append('action', 'convert_to_project');
-            formData.append('inquiry_id', selectedInquiryId);
-
-            try {
-                const response = await fetch('admin-dashboard.php', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                });
-
-                const data = await response.json();
-                if (data.success && data.redirect) {
-                    window.location.href = data.redirect;
-                } else {
-                    alert(data.error || 'Failed to convert inquiry.');
-                    btn.disabled = false;
-                    btn.innerText = 'Convert to Active Project →';
-                }
-            } catch (err) {
-                // Fallback to standard form submission
-                document.getElementById('convertProjectForm').submit();
-            }
-        }
+        document.getElementById('inquiryDetailModal').addEventListener('click', function(e) {
+            if (e.target === this) closeInquiryModal();
+        });
     </script>
+
 </body>
 </html>

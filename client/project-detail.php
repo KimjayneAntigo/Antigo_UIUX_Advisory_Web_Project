@@ -205,7 +205,7 @@ $stageIndex = match($currentPhase) {
           <div class="flex items-center gap-2 text-xs text-[#8890AA] mb-1 font-semibold">
             <a href="dashboard.php" class="hover:underline text-[#4C6CCB]">Dashboard</a>
             <iconify-icon icon="lucide:chevron-right" class="text-xs"></iconify-icon>
-            <a href="dashboard.php#projects" class="hover:underline">Projects</a>
+            <a href="projects.php" class="hover:underline">Projects</a>
             <iconify-icon icon="lucide:chevron-right" class="text-xs"></iconify-icon>
             <span class="text-[#13224B] truncate max-w-xs"><?= htmlspecialchars($project['title'], ENT_QUOTES, 'UTF-8') ?></span>
           </div>
